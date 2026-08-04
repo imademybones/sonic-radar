@@ -1,0 +1,15 @@
+name = "sonic-radar-worker"
+main = "sonic-radar-worker.js"
+compatibility_date = "2026-01-01"
+
+[vars]
+BASE_ID = "appDPw0HGOMswBZfR"
+TABLE_NAME = "Releases"
+# GitHub Pages default origin while the app is on its working name/domain.
+# Update to https://foundfrequency.com at cutover — see project-reference.md
+# "Naming & domain handoff".
+ALLOWED_ORIGIN = "https://imademybones.github.io"
+
+# AIRTABLE_TOKEN is a secret, set with:
+#   wrangler secret put AIRTABLE_TOKEN
+# never committed here.

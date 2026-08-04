@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sonic Radar</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Space+Mono:wght@400;700&family=DM+Sans:wght@200;300;400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header>
+  <div class="header-wave"></div>
+  <div class="header-eyebrow">Studio LPs · Curated Discovery</div>
+  <h1>Sonic <em>Radar</em></h1>
+  <div class="header-sub">Curated new releases · Sonic similarity, not just shared genre tags</div>
+</header>
+
+<div class="controls">
+  <span class="filter-label">Filter</span>
+  <div class="filter-pills" id="filterPills"></div>
+  <select class="month-select" id="monthSelect">
+    <option value="full">Full year</option>
+    <option value="jan">January</option>
+    <option value="feb">February</option>
+    <option value="mar">March</option>
+    <option value="apr">April</option>
+    <option value="may">May</option>
+    <option value="jun">June</option>
+    <option value="jul">July</option>
+    <option value="aug">August</option>
+    <option value="sep">September</option>
+    <option value="oct">October</option>
+    <option value="nov">November</option>
+    <option value="dec">December</option>
+  </select>
+  <button class="btn btn-add" id="addBtn" data-action="toggle-add-form">+ Add</button>
+  <button class="btn btn-export" data-action="export">↓ Export</button>
+  <label class="btn btn-import">
+    ↑ Import
+    <input type="file" id="importFile" accept=".json" style="display:none">
+  </label>
+</div>
+
+<div class="search-bar-wrap">
+  <span class="search-icon">⌕</span>
+  <input type="text" id="searchInput" class="search-input" placeholder="Search artist, album or label…" autocomplete="off" spellcheck="false">
+  <button class="search-clear" id="searchClear" data-action="clear-search">✕</button>
+  <span class="search-count" id="searchCount"></span>
+</div>
+
+<div class="add-form-wrap" id="addFormWrap">
+  <div class="form-title">▸ Add a studio LP manually</div>
+  <div class="form-grid">
+    <div class="form-field">
+      <label>Artist *</label>
+      <input type="text" id="f-artist" placeholder="e.g. Tim Hecker">
+    </div>
+    <div class="form-field">
+      <label>Album Title *</label>
+      <input type="text" id="f-title" placeholder="e.g. Harmony in Ultraviolet">
+    </div>
+    <div class="form-field">
+      <label>Release Date</label>
+      <input type="date" id="f-date">
+    </div>
+    <div class="form-field">
+      <label>Label</label>
+      <input type="text" id="f-label" placeholder="e.g. Kranky">
+    </div>
+  </div>
+  <div class="form-grid" style="grid-template-columns: 1fr; margin-bottom: 0.6rem;">
+    <div class="form-field">
+      <label>Genre (select all that apply)</label>
+      <div class="genre-checks" id="genreChecks">
+        <label class="genre-check"><input type="checkbox" value="Drone / Textural"> Drone / Textural</label>
+        <label class="genre-check"><input type="checkbox" value="Field / Electroacoustic"> Field / Electroacoustic</label>
+        <label class="genre-check"><input type="checkbox" value="Dark / Hauntological"> Dark / Hauntological</label>
+        <label class="genre-check"><input type="checkbox" value="Dub / Textural Techno"> Dub / Textural Techno</label>
+        <label class="genre-check"><input type="checkbox" value="Kosmische / Space"> Kosmische / Space</label>
+      </div>
+    </div>
+  </div>
+  <div class="form-note-row">
+    <div class="form-field" style="flex:1">
+      <label>Notes (optional)</label>
+      <textarea id="f-note" placeholder="A sentence or two about the record…"></textarea>
+    </div>
+    <div>
+      <button class="form-submit" data-action="submit-add">Add to Radar</button>
+    </div>
+  </div>
+  <div class="form-error" id="formError">Please enter at least an artist and album title.</div>
+</div>
+
+<div class="loading-bar" id="loadingBar"></div>
+
+<div class="status-bar" id="statusBar">
+  <span><span class="status-dot" id="statusDot"></span><span id="countDisplay">Loading…</span></span>
+  <span id="lastUpdated"></span>
+</div>
+
+<div class="grid" id="albumGrid"></div>
+
+<div id="modalSlot"></div>
+
+<footer>
+  <span>Sonic Radar · Studio LPs only · No EPs, compilations or live albums</span>
+  <span>Sonic similarity, not just shared genre tags</span>
+</footer>
+
+<script type="module">
+import {
+  parseReleaseDate, releaseYear, formatMonthLabel, dedupeKey, esc,
+  recordToRelease, releaseToFields, similarReleases, moreFromArtist,
+} from './lib/pure.js';
+
+// Set once the Worker is deployed (see project-reference.md). Everything
+// else in this file talks only to this URL — never directly to Airtable.
+const WORKER_URL = 'https://sonic-radar-worker.YOUR_SUBDOMAIN.workers.dev';
+
+const PREFERRED_GENRE_ORDER = [
+  'Drone / Textural', 'Field / Electroacoustic', 'Dark / Hauntological',
+  'Dub / Textural Techno', 'Kosmische / Space',
+];
+
+let releases = [];
+let activeFilter = 'all';
+let activeMonth = 'full';
+let searchQuery = '';
+let openModalId = null;
+let pendingDeleteId = null;
+let pendingDeleteTimeout = null;
+
+// ---- Worker CRUD ----
+
+async function workerRequest(path, options = {}) {
+  const res = await fetch(`${WORKER_URL}${path}`, {
+    ...options,
+    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+  });
+  if (!res.ok) throw new Error(`Worker error ${res.status}: ${await res.text()}`);
+  return res.json();
+}
+
+async function loadReleases() {
+  let all = [];
+  let offset;
+  do {
+    const path = offset ? `/releases?offset=${encodeURIComponent(offset)}` : '/releases';
+    const data = await workerRequest(path);
+    all = all.concat((data.records || []).map(recordToRelease));
+    offset = data.offset;
+  } while (offset);
+  return all;
+}
+
+async function createRelease(entry) {
+  const data = await workerRequest('/releases', {
+    method: 'POST',
+    body: JSON.stringify({ records: [{ fields: releaseToFields(entry) }] }),
+  });
+  return recordToRelease(data.records[0]);
+}
+
+async function patchRelease(id, fields) {
+  const data = await workerRequest(`/releases/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ fields }),
+  });
+  return recordToRelease(data);
+}
+
+async function deleteRelease(id) {
+  await workerRequest(`/releases/${id}`, { method: 'DELETE' });
+}
+
+// ---- Filtering ----
+
+function distinctGenres() {
+  const present = new Set();
+  releases.forEach(r => (r.genre || []).forEach(g => present.add(g)));
+  const ordered = PREFERRED_GENRE_ORDER.filter(g => present.has(g));
+  const extra = [...present].filter(g => !PREFERRED_GENRE_ORDER.includes(g)).sort();
+  return [...ordered, ...extra];
+}
+
+function matchesFilter(r) {
+  if (activeFilter === 'all') return true;
+  if (activeFilter === 'manual') return r.source === 'manual';
+  if (activeFilter === 'heard') return r.listened === true;
+  return (r.genre || []).includes(activeFilter);
+}
+
+function matchesMonth(r) {
+  if (activeMonth === 'full') return true;
+  const d = parseReleaseDate(r.releaseDate);
+  if (!d) return false;
+  const months = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+  return months[d.getMonth()] === activeMonth;
+}
+
+function matchesSearch(r) {
+  if (!searchQuery) return true;
+  const q = searchQuery.toLowerCase();
+  return (r.artist || '').toLowerCase().includes(q) ||
+    (r.title || '').toLowerCase().includes(q) ||
+    (r.label || '').toLowerCase().includes(q) ||
+    (r.notes || '').toLowerCase().includes(q);
+}
+
+function highlight(text, q) {
+  if (!q || !text) return esc(text || '');
+  const re = new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+  return esc(text).replace(re, '<mark class="card-highlight">$1</mark>');
+}
+
+// ---- Render: filter pills ----
+
+function renderFilterPills() {
+  const el = document.getElementById('filterPills');
+  const pills = [
+    { value: 'all', label: 'All' },
+    ...distinctGenres().map(g => ({ value: g, label: g })),
+    { value: 'manual', label: 'My Picks' },
+    { value: 'heard', label: 'Heard' },
+  ];
+  el.innerHTML = pills.map(p => `
+    <button class="pill${p.value === activeFilter ? ' active' : ''}" data-action="set-filter" data-value="${esc(p.value)}">${esc(p.label)}</button>
+  `).join('');
+}
+
+// ---- Render: grid ----
+
+function render() {
+  renderFilterPills();
+  const grid = document.getElementById('albumGrid');
+  const filtered = releases.filter(r => matchesFilter(r) && matchesMonth(r) && matchesSearch(r));
+  filtered.sort((a, b) => (parseReleaseDate(b.releaseDate)?.getTime() ?? 0) - (parseReleaseDate(a.releaseDate)?.getTime() ?? 0));
+
+  document.getElementById('countDisplay').textContent = `${filtered.length} studio LP${filtered.length !== 1 ? 's' : ''}`;
+  document.getElementById('searchCount').textContent = searchQuery ? `${filtered.length} match${filtered.length !== 1 ? 'es' : ''}` : '';
+
+  if (filtered.length === 0) {
+    grid.innerHTML = '<div class="empty-state">No releases match the current filters.</div>';
+    return;
+  }
+
+  let html = '';
+  let currentLabel = null;
+  filtered.forEach((r, i) => {
+    const label = formatMonthLabel(r.releaseDate);
+    if (label !== currentLabel) {
+      currentLabel = label;
+      html += `<div class="section-divider">${esc(label)}</div>`;
+    }
+    html += card(r, i + 1);
+  });
+  grid.innerHTML = html;
+  grid.querySelectorAll('.album-card').forEach((c, i) => {
+    c.style.animationDelay = `${Math.min(i * 30, 600)}ms`;
+  });
+}
+
+function card(r, num) {
+  const heardCls = r.listened ? ' is-heard' : '';
+  const tags = (r.genre || []).map(g => `<span class="meta-tag">${esc(g)}</span>`).join('');
+  const badge = r.source === 'manual' ? '<span class="badge-manual">My Pick</span>' : '';
+  const isPendingDelete = pendingDeleteId === r.id;
+  const deleteBtn = r.source === 'manual'
+    ? `<button class="card-delete" data-action="delete" data-id="${r.id}">${isPendingDelete ? '✕ confirm?' : '✕ remove'}</button>`
+    : '';
+  const q = searchQuery;
+  let dots = '';
+  for (let i = 1; i <= 5; i++) {
+    dots += `<button class="rating-dot${i <= r.rating ? ' filled' : ''}" data-action="rate" data-id="${r.id}" data-value="${i}" title="Rate ${i}/5"></button>`;
+  }
+  return `
+    <div class="album-card${heardCls}">
+      ${badge}
+      <div class="card-number">
+        <span>${String(num).padStart(2, '0')}</span>
+        ${deleteBtn}
+      </div>
+      <div class="card-artist" data-action="open-modal" data-id="${r.id}">${highlight(r.artist, q)}</div>
+      <div class="card-title" data-action="open-modal" data-id="${r.id}">${highlight(r.title, q)}</div>
+      <div class="card-meta">
+        ${r.releaseDate ? `<span class="meta-tag date">${esc(formatMonthLabel(r.releaseDate))}</span>` : ''}
+        ${r.label ? `<span class="meta-tag label">${highlight(r.label, q)}</span>` : ''}
+        ${tags}
+      </div>
+      ${r.notes ? `<div class="card-note">${highlight(r.notes, q)}</div>` : ''}
+      <div class="card-listen-bar">
+        <button class="listen-toggle${r.listened ? ' heard' : ''}" data-action="toggle-listened" data-id="${r.id}">${r.listened ? '✓ Heard' : 'Mark heard'}</button>
+        <div class="rating-dots">${dots}</div>
+      </div>
+    </div>`;
+}
+
+// ---- Render: modal ----
+
+function closeModal() {
+  openModalId = null;
+  document.getElementById('modalSlot').innerHTML = '';
+}
+
+function openModal(id) {
+  const target = releases.find(r => r.id === id);
+  if (!target) return;
+  openModalId = id;
+
+  const similar = similarReleases(target, releases);
+  const moreArtist = moreFromArtist(target, releases);
+
+  const relatedItem = ({ release: r }) => `
+    <div class="related-item" data-action="open-modal" data-id="${r.id}">
+      <div class="related-item-main">
+        <span class="related-item-artist">${esc(r.artist)}</span> —
+        <span class="related-item-title">${esc(r.title)}</span>
+      </div>
+      <span class="related-item-meta">${esc(formatMonthLabel(r.releaseDate))}</span>
+    </div>`;
+  const moreArtistItem = (r) => `
+    <div class="related-item" data-action="open-modal" data-id="${r.id}">
+      <div class="related-item-main"><span class="related-item-title">${esc(r.title)}</span></div>
+      <span class="related-item-meta">${esc(formatMonthLabel(r.releaseDate))}</span>
+    </div>`;
+
+  const html = `
+    <div class="modal-overlay" data-action="close-modal">
+      <div class="modal-box" data-action="noop">
+        <button class="modal-close" data-action="close-modal">✕ close</button>
+        <div class="modal-artist">${esc(target.artist)}</div>
+        <div class="modal-title">${esc(target.title)}</div>
+        <div class="card-meta">
+          ${target.releaseDate ? `<span class="meta-tag date">${esc(formatMonthLabel(target.releaseDate))}</span>` : ''}
+          ${target.label ? `<span class="meta-tag label">${esc(target.label)}</span>` : ''}
+          ${(target.genre || []).map(g => `<span class="meta-tag">${esc(g)}</span>`).join('')}
+        </div>
+        ${target.notes ? `<div class="modal-note">${esc(target.notes)}</div>` : ''}
+
+        <div class="modal-section-title">Similar Releases</div>
+        <div class="related-list">
+          ${similar.length ? similar.map(relatedItem).join('') : '<div class="related-empty">No close matches yet — add descriptor tags to unlock this.</div>'}
+        </div>
+
+        <div class="modal-section-title">More From ${esc(target.artist)}</div>
+        <div class="related-list">
+          ${moreArtist.length ? moreArtist.map(moreArtistItem).join('') : '<div class="related-empty">Nothing else from this artist yet.</div>'}
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modalSlot').innerHTML = html;
+}
+
+// ---- Mutations ----
+
+function setStatus(msg) { document.getElementById('lastUpdated').textContent = msg; }
+
+async function toggleListened(id) {
+  const r = releases.find(x => x.id === id);
+  if (!r) return;
+  try {
+    const updated = await patchRelease(id, { 'Listened': !r.listened });
+    Object.assign(r, updated);
+    render();
+  } catch (e) {
+    console.error(e);
+    setStatus('Could not update — check your connection and try again.');
+  }
+}
+
+async function setRating(id, value) {
+  const r = releases.find(x => x.id === id);
+  if (!r) return;
+  const next = r.rating === value ? 0 : value;
+  try {
+    const updated = await patchRelease(id, { 'Rating': next });
+    Object.assign(r, updated);
+    render();
+  } catch (e) {
+    console.error(e);
+    setStatus('Could not update — check your connection and try again.');
+  }
+}
+
+function requestDelete(id) {
+  if (pendingDeleteId === id) {
+    clearTimeout(pendingDeleteTimeout);
+    pendingDeleteId = null;
+    commitDelete(id);
+    return;
+  }
+  pendingDeleteId = id;
+  clearTimeout(pendingDeleteTimeout);
+  pendingDeleteTimeout = setTimeout(() => { pendingDeleteId = null; render(); }, 3000);
+  render();
+}
+
+async function commitDelete(id) {
+  try {
+    await deleteRelease(id);
+    releases = releases.filter(r => r.id !== id);
+    if (openModalId === id) closeModal();
+    render();
+  } catch (e) {
+    console.error(e);
+    setStatus('Could not delete — check your connection and try again.');
+  }
+}
+
+async function submitAdd() {
+  const artist = document.getElementById('f-artist').value.trim();
+  const title = document.getElementById('f-title').value.trim();
+  const errEl = document.getElementById('formError');
+  if (!artist || !title) { errEl.classList.add('visible'); return; }
+  errEl.classList.remove('visible');
+
+  const genre = [...document.querySelectorAll('#genreChecks input:checked')].map(cb => cb.value);
+  const entry = {
+    artist, title,
+    releaseDate: document.getElementById('f-date').value || '',
+    label: document.getElementById('f-label').value.trim(),
+    genre,
+    notes: document.getElementById('f-note').value.trim(),
+    source: 'manual',
+  };
+
+  const btn = document.querySelector('[data-action="submit-add"]');
+  const orig = btn.textContent;
+  btn.textContent = 'Adding…';
+  try {
+    const created = await createRelease(entry);
+    releases.unshift(created);
+    ['f-artist', 'f-title', 'f-date', 'f-label', 'f-note'].forEach(id => { document.getElementById(id).value = ''; });
+    document.querySelectorAll('#genreChecks input').forEach(cb => { cb.checked = false; });
+    render();
+    btn.textContent = '✓ Added!';
+    setTimeout(() => { btn.textContent = orig; }, 1200);
+  } catch (e) {
+    console.error(e);
+    setStatus('Could not add — check your connection and try again.');
+    btn.textContent = orig;
+  }
+}
+
+// ---- Import / export ----
+
+function exportData() {
+  const payload = { exported: new Date().toISOString(), version: 1, note: 'Sonic Radar export', releases };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `sonic-radar-export-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+async function importData(file) {
+  const text = await file.text();
+  let parsed;
+  try { parsed = JSON.parse(text); } catch { setStatus('Import failed — file may be invalid.'); return; }
+  const incoming = Array.isArray(parsed) ? parsed : (parsed.releases || []);
+  const existing = new Set(releases.map(r => dedupeKey(r.artist, r.title)));
+  const toAdd = incoming.filter(r => r.artist && r.title && !existing.has(dedupeKey(r.artist, r.title)));
+
+  let added = 0;
+  for (let i = 0; i < toAdd.length; i += 10) {
+    const batch = toAdd.slice(i, i + 10);
+    const data = await workerRequest('/releases', {
+      method: 'POST',
+      body: JSON.stringify({ records: batch.map(r => ({ fields: releaseToFields(r) })) }),
+    });
+    releases.push(...data.records.map(recordToRelease));
+    added += batch.length;
+  }
+  render();
+  setStatus(`Import complete — ${added} release${added !== 1 ? 's' : ''} added.`);
+}
+
+// ---- Event delegation ----
+
+document.addEventListener('click', (e) => {
+  const target = e.target.closest('[data-action]');
+  if (!target) return;
+  const action = target.dataset.action;
+  const id = target.dataset.id;
+
+  switch (action) {
+    case 'set-filter':
+      activeFilter = target.dataset.value;
+      render();
+      break;
+    case 'toggle-add-form': {
+      const wrap = document.getElementById('addFormWrap');
+      const btn = document.getElementById('addBtn');
+      const isOpen = wrap.classList.toggle('open');
+      btn.classList.toggle('open', isOpen);
+      btn.textContent = isOpen ? '✕ Close' : '+ Add';
+      if (isOpen) document.getElementById('f-artist').focus();
+      break;
+    }
+    case 'submit-add':
+      submitAdd();
+      break;
+    case 'clear-search':
+      document.getElementById('searchInput').value = '';
+      searchQuery = '';
+      document.getElementById('searchClear').classList.remove('visible');
+      render();
+      break;
+    case 'toggle-listened':
+      toggleListened(id);
+      break;
+    case 'rate':
+      setRating(id, Number(target.dataset.value));
+      break;
+    case 'delete':
+      requestDelete(id);
+      break;
+    case 'open-modal':
+      openModal(id);
+      break;
+    case 'close-modal':
+      closeModal();
+      break;
+    case 'export':
+      exportData();
+      break;
+  }
+});
+
+document.getElementById('searchInput').addEventListener('input', (e) => {
+  searchQuery = e.target.value.trim();
+  document.getElementById('searchClear').classList.toggle('visible', searchQuery.length > 0);
+  render();
+});
+
+document.getElementById('monthSelect').addEventListener('change', (e) => {
+  activeMonth = e.target.value;
+  render();
+});
+
+document.getElementById('importFile').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (file) importData(file);
+  e.target.value = '';
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && openModalId) closeModal();
+  if (e.key === 'Enter' && document.getElementById('addFormWrap').classList.contains('open') && e.target.tagName !== 'TEXTAREA') {
+    submitAdd();
+  }
+});
+
+// ---- Init ----
+
+async function init() {
+  try {
+    releases = await loadReleases();
+    render();
+    setStatus(`Loaded ${new Date().toLocaleTimeString()}`);
+  } catch (e) {
+    console.error(e);
+    document.getElementById('countDisplay').textContent = 'Could not load releases';
+    setStatus('Check the Worker URL in index.html and your connection.');
+  }
+}
+
+init();
+</script>
+</body>
+</html>
