@@ -51,6 +51,7 @@ Fields (name → id):
 | Source | `fldv1Xrw5cUUeNwmQ` | singleSelect (`curated`, `community`; `manual` is a retired unused choice, harmless leftover) |
 | Hearts | `fldczCJJrTRXm9y1F` | number (aggregate, open to anyone) |
 | Spotify URL | `fldG1PirapSvv99IM` | url (contributor-pasted, see CLAUDE.md) |
+| Bandcamp URL | `fldXDQc0tts3Fktfg` | url (contributor-pasted link-out, scheme-checked via `safeExternalUrl`) |
 | Added By | `fldxNMr7EyxvPgYYb` | singleLineText (optional, free-text, unverified) |
 | Added At | `fldcZU3qgMsaqlef6` | number (epoch ms) |
 | Updated At | `fldbujz7v3zw0wLh4` | number (epoch ms) |
@@ -69,8 +70,12 @@ through direct Airtable access at the time, not the token-based path —
 see the script's own comments for the token-based flow for future
 reruns). All 30 were descriptor-tagged the same day (Texture/Tone/
 Character/Density/Motion) so Similar Releases has real matches from the
-start. Spotify URLs are being backfilled separately — check a given
-release's `Spotify URL` field before assuming it's empty.
+start. Spotify URLs were backfilled 2026-08-04 for 27 of 30 (confirmed
+matches only, incl. HH supplied by Stephen; two are track-level
+fallbacks: Hild, Only Came To Say Goodbye); the remaining 3
+Bandcamp-only releases (Culatra, music* *?, Piano Works) got
+`Bandcamp URL` links instead, so every seed release has some preview
+path.
 
 ## Cloudflare Worker
 

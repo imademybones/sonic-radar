@@ -79,6 +79,10 @@
       <input type="text" id="f-spotify" placeholder="open.spotify.com/album/…">
     </div>
     <div class="form-field">
+      <label>Bandcamp Link (optional)</label>
+      <input type="text" id="f-bandcamp" placeholder="artist.bandcamp.com/album/…">
+    </div>
+    <div class="form-field">
       <label>Your Name (optional)</label>
       <input type="text" id="f-addedby" placeholder="e.g. Stephen">
     </div>
@@ -133,7 +137,8 @@
 <script type="module">
 import {
   parseReleaseDate, releaseYear, formatMonthLabel, dedupeKey, esc,
-  recordToRelease, releaseToFields, spotifyEmbedUrl, similarReleases, moreFromArtist,
+  recordToRelease, releaseToFields, spotifyEmbedUrl, safeExternalUrl,
+  similarReleases, moreFromArtist,
 } from './lib/pure.js';
 
 // Set once the Worker is deployed (see project-reference.md). Everything
@@ -307,6 +312,7 @@ function card(r, num) {
     : '';
   const q = searchQuery;
   const embedUrl = spotifyEmbedUrl(r.spotifyUrl);
+  const bandcampUrl = safeExternalUrl(r.bandcampUrl);
   const isHearted = heartedIds.has(r.id);
   return `
     <div class="album-card">
@@ -326,6 +332,7 @@ function card(r, num) {
       ${embedUrl ? `<div class="spotify-embed"><iframe src="${esc(embedUrl)}" width="100%" height="152" frameborder="0" loading="lazy" allow="encrypted-media"></iframe></div>` : ''}
       <div class="card-listen-bar">
         <button class="heart-btn${isHearted ? ' hearted' : ''}" data-action="heart" data-id="${r.id}" title="${isHearted ? 'You hearted this' : 'Heart this release'}">${isHearted ? '♥' : '♡'} ${r.hearts || 0}</button>
+        ${bandcampUrl ? `<a class="bandcamp-link" href="${esc(bandcampUrl)}" target="_blank" rel="noopener">Bandcamp ↗</a>` : ''}
         ${r.addedBy ? `<span class="added-by">added by ${esc(r.addedBy)}</span>` : ''}
       </div>
     </div>`;
@@ -361,6 +368,7 @@ function openModal(id) {
     </div>`;
 
   const embedUrl = spotifyEmbedUrl(target.spotifyUrl);
+  const modalBandcampUrl = safeExternalUrl(target.bandcampUrl);
   const html = `
     <div class="modal-overlay" data-action="close-modal">
       <div class="modal-box" data-action="noop">
@@ -374,6 +382,7 @@ function openModal(id) {
         </div>
         ${target.notes ? `<div class="modal-note">${esc(target.notes)}</div>` : ''}
         ${embedUrl ? `<div class="spotify-embed"><iframe src="${esc(embedUrl)}" width="100%" height="152" frameborder="0" loading="lazy" allow="encrypted-media"></iframe></div>` : ''}
+        ${modalBandcampUrl ? `<a class="bandcamp-link modal-bandcamp" href="${esc(modalBandcampUrl)}" target="_blank" rel="noopener">Listen / buy on Bandcamp ↗</a>` : ''}
 
         <div class="modal-section-title">Similar Releases</div>
         <div class="related-list">
@@ -493,6 +502,7 @@ async function submitAdd() {
     genre,
     notes: document.getElementById('f-note').value.trim(),
     spotifyUrl: document.getElementById('f-spotify').value.trim(),
+    bandcampUrl: document.getElementById('f-bandcamp').value.trim(),
     addedBy: document.getElementById('f-addedby').value.trim(),
     source: 'community',
   };
@@ -503,7 +513,7 @@ async function submitAdd() {
   try {
     const created = await createRelease(entry);
     releases.unshift(created);
-    ['f-artist', 'f-title', 'f-date', 'f-label', 'f-spotify', 'f-addedby', 'f-note'].forEach(id => { document.getElementById(id).value = ''; });
+    ['f-artist', 'f-title', 'f-date', 'f-label', 'f-spotify', 'f-bandcamp', 'f-addedby', 'f-note'].forEach(id => { document.getElementById(id).value = ''; });
     document.querySelectorAll('#genreChecks input').forEach(cb => { cb.checked = false; });
     render();
     btn.textContent = '✓ Added!';

@@ -512,6 +512,23 @@ h1 em { font-style: italic; color: var(--accent); font-weight: 300; }
   text-overflow: ellipsis;
 }
 
+.bandcamp-link {
+  font-family: 'Space Mono', monospace;
+  font-size: 0.52rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  border: 1px solid var(--border2);
+  padding: 0.2rem 0.6rem;
+  border-radius: 20px;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+.bandcamp-link:hover { border-color: var(--accent); color: var(--accent); }
+
+.modal-bandcamp { display: inline-block; margin-top: 0.8rem; }
+
 /* ── MODAL (Similar Releases / More From This Artist) ── */
 
 .modal-overlay {

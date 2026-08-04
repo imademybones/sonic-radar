@@ -135,6 +135,17 @@ API integration (no client ID/secret, no search-autofill) — that was
 explicitly scoped out to keep the Worker simple; if autofill is wanted
 later it's a new, separate decision, not an assumed next step.
 
+**Bandcamp is a link-out, not an embed — and deliberately the only other
+service.** Spotify (inline player) + Bandcamp (a "Bandcamp ↗" link on
+the card/modal) is the intentional full set; Apple Music/Tidal/etc. were
+considered and rejected as add-form friction with no audience in this
+scene. Bandcamp can't be an embed because its player iframes need a
+numeric album ID that isn't derivable from a pasted page URL. Because
+`bandcampUrl` is a contributor-pasted string rendered into an `href`, it
+MUST go through `safeExternalUrl()` (scheme check) at every render site —
+`esc()` alone does not stop a `javascript:` URL. Bandcamp links pass
+through as-is (no domain pinning) since labels use custom domains.
+
 **"Sonic similarity" is structured, not just genre overlap.** The whole
 point of this app over a plain release tracker: `lib/pure.js` computes a
 weighted score per release pair from descriptor-tag overlap (Texture,
