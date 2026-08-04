@@ -10,6 +10,6 @@ TABLE_NAME = "Releases"
 # "Naming & domain handoff".
 ALLOWED_ORIGIN = "https://imademybones.github.io"
 
-# AIRTABLE_TOKEN is a secret, set with:
+# Secrets, never committed here:
 #   wrangler secret put AIRTABLE_TOKEN
-# never committed here.
+#   wrangler secret put CURATOR_PASSPHRASE   # gates PATCH/DELETE only — see CLAUDE.md

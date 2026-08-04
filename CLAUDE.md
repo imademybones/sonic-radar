@@ -4,9 +4,11 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 ## What this is
 
-A curated tracker and discovery tool for studio LP releases, starting
-with ambient/drone-adjacent music and meant to expand to other genres
-over time. `index.html` (markup + `<script type="module">`) plus
+A **public, collaborative** discovery tool for studio LP releases —
+currently ambient/drone-adjacent only by deliberate choice (building
+depth in one genre before expanding), though the architecture doesn't
+hardcode that. Anyone can add a release or heart one; no accounts, no
+login. `index.html` (markup + `<script type="module">`) plus
 `styles.css`, with pure helper/scoring logic factored out to `lib/pure.js`.
 No build step, no package manager, no framework — served as a static
 file (GitHub Pages) directly from `index.html`.
@@ -34,8 +36,8 @@ mirroring music-tracker's non-blocking setup.
   Without one, the app still renders its shell and fails gracefully
   (a status message, not a crash) — useful for pure UI iteration.
 - Verify changes by exercising the UI in a browser (filter, search, add,
-  listen/rate, delete, open a release's Similar Releases modal) — no UI
-  test automation, only the pure-function suite above.
+  heart, curator unlock + delete, open a release's Similar Releases
+  modal) — no UI test automation, only the pure-function suite above.
 
 ## Architecture
 
@@ -63,11 +65,35 @@ tribal knowledge. The Worker proxies Airtable CRUD only — no Spotify
 proxy, no AI-discovery route (see below).
 
 **No Cloudflare Access gate — this app is intentionally public.** The
-Worker's only protection on writes is an Origin check, which is
-spoofable outside a browser (same caveat music-tracker documents for
-itself). The Airtable token never leaves the Worker either way. If this
-ever needs to be private, bolting on Access later is a contained change —
-see music-tracker's own setup for the recipe.
+Airtable token never leaves the Worker either way. If this ever needs to
+be private, bolting on Access later is a contained change — see
+music-tracker's own setup for the recipe.
+
+**Collaborative write model — split by risk, not by feature.** This was
+an explicit user decision, not a default: `POST /releases` (add a
+release) and `POST /releases/:id/heart` (aggregate engagement signal)
+are open to anyone, no gate — that's the point of a collaborative
+catalogue. `PATCH /releases/:id` and `DELETE /releases/:id` require an
+`X-Curator-Passphrase` header matching the `CURATOR_PASSPHRASE` Worker
+secret, checked via `isCurator()` in the Worker. The client caches a
+verified passphrase in `localStorage` (`sonicRadar_curatorKey`) after
+confirming it against `GET /verify-curator`, and clears it on a 403 so a
+stale/wrong cached value doesn't keep silently failing. **This is a
+single shared static passphrase, not per-user auth** — anyone the
+passphrase is shared with has full curator power (edit/delete anything),
+and it's still only an Origin-plus-header check, spoofable outside a
+browser the same way music-tracker's Origin check is. Acceptable for
+this app's stakes (worst case: a trusted collaborator's mistake, not a
+stranger's), but don't describe it to users as real authentication.
+
+**Hearts are an open, low-stakes aggregate counter, not a vote you can
+trust adversarially.** `POST /releases/:id/heart` does a read-then-write
+increment against Airtable with no locking — a rare simultaneous
+double-click can lose an increment, and nothing stops someone from
+clearing `localStorage` and re-hearting the same release repeatedly from
+one browser. Both are accepted trade-offs for staying gate-free; don't
+"fix" this by adding auth or a transactional counter unless the
+collaborative-but-ungated premise itself changes.
 
 **The "Refresh with AI" release-discovery feature from the prototype was
 deliberately dropped, not ported.** It called the Anthropic API directly
@@ -82,18 +108,32 @@ in `lib/pure.js`) has: `id`, `artist`, `title`, `releaseDate` (ISO
 `YYYY-MM-DD`), `label`, `genre` (array of full display strings like
 `"Drone / Textural"`, not short codes), `texture`/`tone`/`character`
 (descriptor tag arrays), `density`/`motion` (1–5 or `null`), `notes`,
-`source` (`curated` | `manual`), `listened`, `rating` (0–5), `addedAt`,
-`updatedAt`. These map 1:1 to Airtable field names — see
-project-reference.md for the actual field IDs.
+`source` (`curated` | `community`), `hearts` (number, aggregate),
+`spotifyUrl`, `addedBy` (free-text, optional, no verification it's real),
+`addedAt`, `updatedAt`. These map 1:1 to Airtable field names — see
+project-reference.md for the actual field IDs. There is deliberately no
+per-user `listened`/`rating` anymore — that was personal-log state from
+before the collaborative pivot and doesn't have a coherent meaning when
+"who listened" could be any visitor; see the git history around the
+collaborative-pivot commit if you need the old semantics for reference.
 
 **Genre is data-driven, not hardcoded.** The filter pill row is built
 from the distinct `Genre` values present in loaded data (plus fixed
-`All`/`My Picks`/`Heard` pills), not a static list — so adding a new
-genre later (the whole point of eventually expanding past ambient) is an
-Airtable-choices change, not a code change. The manual-add form's genre
+`All`/`Community Adds` pills), not a static list — so adding a new genre
+later (the whole point of eventually expanding past ambient) is an
+Airtable-choices change, not a code change. The add form's genre
 checkboxes are still a fixed list matching the current Airtable choices
 (`index.html`, `#genreChecks`) — update that list by hand when a new
 genre choice is added to Airtable.
+
+**Spotify previews are contributor-pasted links, not an API integration.**
+`spotifyEmbedUrl()` in `lib/pure.js` normalizes whatever a contributor
+pastes (a full `open.spotify.com/{album|track}/ID` link, with or without
+a `?si=` tracking param, or a `spotify:album:ID` URI) into Spotify's
+no-auth-required embed iframe URL. There is intentionally no Spotify Web
+API integration (no client ID/secret, no search-autofill) — that was
+explicitly scoped out to keep the Worker simple; if autofill is wanted
+later it's a new, separate decision, not an assumed next step.
 
 **"Sonic similarity" is structured, not just genre overlap.** The whole
 point of this app over a plain release tracker: `lib/pure.js` computes a

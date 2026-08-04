@@ -11,14 +11,18 @@
 
 <header>
   <div class="header-wave"></div>
-  <div class="header-eyebrow">Studio LPs · Curated Discovery</div>
+  <div class="header-eyebrow">Ambient · Drone · Studio LPs</div>
   <h1>Sonic <em>Radar</em></h1>
-  <div class="header-sub">Curated new releases · Sonic similarity, not just shared genre tags</div>
+  <div class="header-sub">A growing, collaborative catalogue · Sonic similarity, not just shared genre tags</div>
 </header>
 
 <div class="controls">
   <span class="filter-label">Filter</span>
   <div class="filter-pills" id="filterPills"></div>
+  <select class="month-select" id="sortSelect">
+    <option value="newest">Newest</option>
+    <option value="hearted">Most Hearted</option>
+  </select>
   <select class="month-select" id="monthSelect">
     <option value="full">Full year</option>
     <option value="jan">January</option>
@@ -34,7 +38,7 @@
     <option value="nov">November</option>
     <option value="dec">December</option>
   </select>
-  <button class="btn btn-add" id="addBtn" data-action="toggle-add-form">+ Add</button>
+  <button class="btn btn-add" id="addBtn" data-action="toggle-add-form">+ Add a release</button>
   <button class="btn btn-export" data-action="export">↓ Export</button>
   <label class="btn btn-import">
     ↑ Import
@@ -50,7 +54,7 @@
 </div>
 
 <div class="add-form-wrap" id="addFormWrap">
-  <div class="form-title">▸ Add a studio LP manually</div>
+  <div class="form-title">▸ Add an ambient studio LP — no login needed</div>
   <div class="form-grid">
     <div class="form-field">
       <label>Artist *</label>
@@ -67,6 +71,16 @@
     <div class="form-field">
       <label>Label</label>
       <input type="text" id="f-label" placeholder="e.g. Kranky">
+    </div>
+  </div>
+  <div class="form-grid">
+    <div class="form-field">
+      <label>Spotify Link (optional)</label>
+      <input type="text" id="f-spotify" placeholder="open.spotify.com/album/…">
+    </div>
+    <div class="form-field">
+      <label>Your Name (optional)</label>
+      <input type="text" id="f-addedby" placeholder="e.g. Stephen">
     </div>
   </div>
   <div class="form-grid" style="grid-template-columns: 1fr; margin-bottom: 0.6rem;">
@@ -105,14 +119,21 @@
 <div id="modalSlot"></div>
 
 <footer>
-  <span>Sonic Radar · Studio LPs only · No EPs, compilations or live albums</span>
-  <span>Sonic similarity, not just shared genre tags</span>
+  <span>Sonic Radar · Studio LPs only · No EPs, compilations or live albums · Anyone can add a release</span>
+  <div class="curator-zone">
+    <span class="curator-status" id="curatorStatus"></span>
+    <button class="curator-toggle" data-action="toggle-curator">🔑 Curator</button>
+    <div class="curator-form" id="curatorForm">
+      <input type="password" id="curatorInput" class="curator-input" placeholder="passphrase">
+      <button class="curator-submit" data-action="submit-curator">Unlock</button>
+    </div>
+  </div>
 </footer>
 
 <script type="module">
 import {
   parseReleaseDate, releaseYear, formatMonthLabel, dedupeKey, esc,
-  recordToRelease, releaseToFields, similarReleases, moreFromArtist,
+  recordToRelease, releaseToFields, spotifyEmbedUrl, similarReleases, moreFromArtist,
 } from './lib/pure.js';
 
 // Set once the Worker is deployed (see project-reference.md). Everything
@@ -124,20 +145,34 @@ const PREFERRED_GENRE_ORDER = [
   'Dub / Textural Techno', 'Kosmische / Space',
 ];
 
+const CURATOR_KEY_STORAGE = 'sonicRadar_curatorKey';
+const HEARTED_STORAGE = 'sonicRadar_heartedIds';
+
 let releases = [];
 let activeFilter = 'all';
 let activeMonth = 'full';
+let activeSort = 'newest';
 let searchQuery = '';
 let openModalId = null;
 let pendingDeleteId = null;
 let pendingDeleteTimeout = null;
+let curatorKey = localStorage.getItem(CURATOR_KEY_STORAGE) || '';
+let heartedIds = new Set(JSON.parse(localStorage.getItem(HEARTED_STORAGE) || '[]'));
 
 // ---- Worker CRUD ----
+// PATCH/DELETE send the curator passphrase if we have one — the Worker
+// is the one that actually enforces it; an empty/wrong value just gets a
+// 403 back, same as not having one.
 
 async function workerRequest(path, options = {}) {
+  const needsCurator = options.method === 'PATCH' || options.method === 'DELETE';
   const res = await fetch(`${WORKER_URL}${path}`, {
     ...options,
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(needsCurator && curatorKey ? { 'X-Curator-Passphrase': curatorKey } : {}),
+      ...(options.headers || {}),
+    },
   });
   if (!res.ok) throw new Error(`Worker error ${res.status}: ${await res.text()}`);
   return res.json();
@@ -163,14 +198,6 @@ async function createRelease(entry) {
   return recordToRelease(data.records[0]);
 }
 
-async function patchRelease(id, fields) {
-  const data = await workerRequest(`/releases/${id}`, {
-    method: 'PATCH',
-    body: JSON.stringify({ fields }),
-  });
-  return recordToRelease(data);
-}
-
 async function deleteRelease(id) {
   await workerRequest(`/releases/${id}`, { method: 'DELETE' });
 }
@@ -187,8 +214,7 @@ function distinctGenres() {
 
 function matchesFilter(r) {
   if (activeFilter === 'all') return true;
-  if (activeFilter === 'manual') return r.source === 'manual';
-  if (activeFilter === 'heard') return r.listened === true;
+  if (activeFilter === 'community') return r.source === 'community';
   return (r.genre || []).includes(activeFilter);
 }
 
@@ -222,8 +248,7 @@ function renderFilterPills() {
   const pills = [
     { value: 'all', label: 'All' },
     ...distinctGenres().map(g => ({ value: g, label: g })),
-    { value: 'manual', label: 'My Picks' },
-    { value: 'heard', label: 'Heard' },
+    { value: 'community', label: 'Community Adds' },
   ];
   el.innerHTML = pills.map(p => `
     <button class="pill${p.value === activeFilter ? ' active' : ''}" data-action="set-filter" data-value="${esc(p.value)}">${esc(p.label)}</button>
@@ -234,9 +259,15 @@ function renderFilterPills() {
 
 function render() {
   renderFilterPills();
+  updateCuratorUI();
   const grid = document.getElementById('albumGrid');
   const filtered = releases.filter(r => matchesFilter(r) && matchesMonth(r) && matchesSearch(r));
-  filtered.sort((a, b) => (parseReleaseDate(b.releaseDate)?.getTime() ?? 0) - (parseReleaseDate(a.releaseDate)?.getTime() ?? 0));
+
+  if (activeSort === 'hearted') {
+    filtered.sort((a, b) => (b.hearts || 0) - (a.hearts || 0));
+  } else {
+    filtered.sort((a, b) => (parseReleaseDate(b.releaseDate)?.getTime() ?? 0) - (parseReleaseDate(a.releaseDate)?.getTime() ?? 0));
+  }
 
   document.getElementById('countDisplay').textContent = `${filtered.length} studio LP${filtered.length !== 1 ? 's' : ''}`;
   document.getElementById('searchCount').textContent = searchQuery ? `${filtered.length} match${filtered.length !== 1 ? 'es' : ''}` : '';
@@ -247,15 +278,20 @@ function render() {
   }
 
   let html = '';
-  let currentLabel = null;
-  filtered.forEach((r, i) => {
-    const label = formatMonthLabel(r.releaseDate);
-    if (label !== currentLabel) {
-      currentLabel = label;
-      html += `<div class="section-divider">${esc(label)}</div>`;
-    }
-    html += card(r, i + 1);
-  });
+  // Month dividers only make sense when sorted chronologically.
+  if (activeSort === 'hearted') {
+    html = filtered.map((r, i) => card(r, i + 1)).join('');
+  } else {
+    let currentLabel = null;
+    filtered.forEach((r, i) => {
+      const label = formatMonthLabel(r.releaseDate);
+      if (label !== currentLabel) {
+        currentLabel = label;
+        html += `<div class="section-divider">${esc(label)}</div>`;
+      }
+      html += card(r, i + 1);
+    });
+  }
   grid.innerHTML = html;
   grid.querySelectorAll('.album-card').forEach((c, i) => {
     c.style.animationDelay = `${Math.min(i * 30, 600)}ms`;
@@ -263,20 +299,17 @@ function render() {
 }
 
 function card(r, num) {
-  const heardCls = r.listened ? ' is-heard' : '';
   const tags = (r.genre || []).map(g => `<span class="meta-tag">${esc(g)}</span>`).join('');
-  const badge = r.source === 'manual' ? '<span class="badge-manual">My Pick</span>' : '';
+  const badge = r.source === 'community' ? '<span class="badge-community">Community</span>' : '';
   const isPendingDelete = pendingDeleteId === r.id;
-  const deleteBtn = r.source === 'manual'
+  const deleteBtn = curatorKey
     ? `<button class="card-delete" data-action="delete" data-id="${r.id}">${isPendingDelete ? '✕ confirm?' : '✕ remove'}</button>`
     : '';
   const q = searchQuery;
-  let dots = '';
-  for (let i = 1; i <= 5; i++) {
-    dots += `<button class="rating-dot${i <= r.rating ? ' filled' : ''}" data-action="rate" data-id="${r.id}" data-value="${i}" title="Rate ${i}/5"></button>`;
-  }
+  const embedUrl = spotifyEmbedUrl(r.spotifyUrl);
+  const isHearted = heartedIds.has(r.id);
   return `
-    <div class="album-card${heardCls}">
+    <div class="album-card">
       ${badge}
       <div class="card-number">
         <span>${String(num).padStart(2, '0')}</span>
@@ -290,9 +323,10 @@ function card(r, num) {
         ${tags}
       </div>
       ${r.notes ? `<div class="card-note">${highlight(r.notes, q)}</div>` : ''}
+      ${embedUrl ? `<div class="spotify-embed"><iframe src="${esc(embedUrl)}" width="100%" height="152" frameborder="0" loading="lazy" allow="encrypted-media"></iframe></div>` : ''}
       <div class="card-listen-bar">
-        <button class="listen-toggle${r.listened ? ' heard' : ''}" data-action="toggle-listened" data-id="${r.id}">${r.listened ? '✓ Heard' : 'Mark heard'}</button>
-        <div class="rating-dots">${dots}</div>
+        <button class="heart-btn${isHearted ? ' hearted' : ''}" data-action="heart" data-id="${r.id}" title="${isHearted ? 'You hearted this' : 'Heart this release'}">${isHearted ? '♥' : '♡'} ${r.hearts || 0}</button>
+        ${r.addedBy ? `<span class="added-by">added by ${esc(r.addedBy)}</span>` : ''}
       </div>
     </div>`;
 }
@@ -326,6 +360,7 @@ function openModal(id) {
       <span class="related-item-meta">${esc(formatMonthLabel(r.releaseDate))}</span>
     </div>`;
 
+  const embedUrl = spotifyEmbedUrl(target.spotifyUrl);
   const html = `
     <div class="modal-overlay" data-action="close-modal">
       <div class="modal-box" data-action="noop">
@@ -338,6 +373,7 @@ function openModal(id) {
           ${(target.genre || []).map(g => `<span class="meta-tag">${esc(g)}</span>`).join('')}
         </div>
         ${target.notes ? `<div class="modal-note">${esc(target.notes)}</div>` : ''}
+        ${embedUrl ? `<div class="spotify-embed"><iframe src="${esc(embedUrl)}" width="100%" height="152" frameborder="0" loading="lazy" allow="encrypted-media"></iframe></div>` : ''}
 
         <div class="modal-section-title">Similar Releases</div>
         <div class="related-list">
@@ -357,30 +393,56 @@ function openModal(id) {
 
 function setStatus(msg) { document.getElementById('lastUpdated').textContent = msg; }
 
-async function toggleListened(id) {
+// ---- Hearts (open to everyone — dedup is per-browser via localStorage,
+// not cryptographically enforced; good enough for a low-stakes collaborative
+// engagement signal, not meant to resist someone clearing their storage) ----
+
+async function heartRelease(id) {
+  if (heartedIds.has(id)) return; // already hearted from this browser
   const r = releases.find(x => x.id === id);
   if (!r) return;
+  heartedIds.add(id);
+  localStorage.setItem(HEARTED_STORAGE, JSON.stringify([...heartedIds]));
+  r.hearts = (r.hearts || 0) + 1; // optimistic
+  render();
   try {
-    const updated = await patchRelease(id, { 'Listened': !r.listened });
-    Object.assign(r, updated);
-    render();
+    await workerRequest(`/releases/${id}/heart`, { method: 'POST' });
   } catch (e) {
     console.error(e);
-    setStatus('Could not update — check your connection and try again.');
+    // Not worth rolling back visually over — the aggregate count will
+    // self-correct next time releases are reloaded.
   }
 }
 
-async function setRating(id, value) {
-  const r = releases.find(x => x.id === id);
-  if (!r) return;
-  const next = r.rating === value ? 0 : value;
+// ---- Curator mode ----
+// Anyone can add or heart; editing/removing an existing release needs the
+// shared curator passphrase, verified against the Worker (never checked
+// client-side) and cached in localStorage once correct.
+
+function updateCuratorUI() {
+  const statusEl = document.getElementById('curatorStatus');
+  const toggleEl = document.querySelector('[data-action="toggle-curator"]');
+  if (!statusEl || !toggleEl) return;
+  statusEl.textContent = curatorKey ? '🔓 curator mode' : '';
+  toggleEl.style.display = curatorKey ? 'none' : '';
+}
+
+async function submitCuratorPassphrase() {
+  const input = document.getElementById('curatorInput');
+  const value = input.value.trim();
+  if (!value) return;
   try {
-    const updated = await patchRelease(id, { 'Rating': next });
-    Object.assign(r, updated);
+    const res = await fetch(`${WORKER_URL}/verify-curator`, { headers: { 'X-Curator-Passphrase': value } });
+    if (!res.ok) { setStatus('Incorrect curator passphrase.'); return; }
+    curatorKey = value;
+    localStorage.setItem(CURATOR_KEY_STORAGE, curatorKey);
+    input.value = '';
+    document.getElementById('curatorForm').classList.remove('open');
+    setStatus('Curator mode unlocked.');
     render();
   } catch (e) {
     console.error(e);
-    setStatus('Could not update — check your connection and try again.');
+    setStatus('Could not verify passphrase — check your connection.');
   }
 }
 
@@ -405,7 +467,14 @@ async function commitDelete(id) {
     render();
   } catch (e) {
     console.error(e);
-    setStatus('Could not delete — check your connection and try again.');
+    if (String(e.message).includes('403')) {
+      curatorKey = '';
+      localStorage.removeItem(CURATOR_KEY_STORAGE);
+      setStatus('Curator passphrase rejected — unlock again to delete.');
+      render();
+    } else {
+      setStatus('Could not delete — check your connection and try again.');
+    }
   }
 }
 
@@ -423,7 +492,9 @@ async function submitAdd() {
     label: document.getElementById('f-label').value.trim(),
     genre,
     notes: document.getElementById('f-note').value.trim(),
-    source: 'manual',
+    spotifyUrl: document.getElementById('f-spotify').value.trim(),
+    addedBy: document.getElementById('f-addedby').value.trim(),
+    source: 'community',
   };
 
   const btn = document.querySelector('[data-action="submit-add"]');
@@ -432,7 +503,7 @@ async function submitAdd() {
   try {
     const created = await createRelease(entry);
     releases.unshift(created);
-    ['f-artist', 'f-title', 'f-date', 'f-label', 'f-note'].forEach(id => { document.getElementById(id).value = ''; });
+    ['f-artist', 'f-title', 'f-date', 'f-label', 'f-spotify', 'f-addedby', 'f-note'].forEach(id => { document.getElementById(id).value = ''; });
     document.querySelectorAll('#genreChecks input').forEach(cb => { cb.checked = false; });
     render();
     btn.textContent = '✓ Added!';
@@ -509,11 +580,8 @@ document.addEventListener('click', (e) => {
       document.getElementById('searchClear').classList.remove('visible');
       render();
       break;
-    case 'toggle-listened':
-      toggleListened(id);
-      break;
-    case 'rate':
-      setRating(id, Number(target.dataset.value));
+    case 'heart':
+      heartRelease(id);
       break;
     case 'delete':
       requestDelete(id);
@@ -527,6 +595,13 @@ document.addEventListener('click', (e) => {
     case 'export':
       exportData();
       break;
+    case 'toggle-curator':
+      document.getElementById('curatorForm').classList.toggle('open');
+      document.getElementById('curatorInput').focus();
+      break;
+    case 'submit-curator':
+      submitCuratorPassphrase();
+      break;
   }
 });
 
@@ -539,6 +614,15 @@ document.getElementById('searchInput').addEventListener('input', (e) => {
 document.getElementById('monthSelect').addEventListener('change', (e) => {
   activeMonth = e.target.value;
   render();
+});
+
+document.getElementById('sortSelect').addEventListener('change', (e) => {
+  activeSort = e.target.value;
+  render();
+});
+
+document.getElementById('curatorInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') submitCuratorPassphrase();
 });
 
 document.getElementById('importFile').addEventListener('change', (e) => {
@@ -557,6 +641,7 @@ document.addEventListener('keydown', (e) => {
 // ---- Init ----
 
 async function init() {
+  updateCuratorUI();
   try {
     releases = await loadReleases();
     render();
