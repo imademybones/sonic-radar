@@ -114,6 +114,19 @@ h1 em { font-style: italic; color: var(--accent); font-weight: 300; }
 
 .filter-pills { display: flex; gap: 0.35rem; flex-wrap: wrap; flex: 1; }
 
+.subgenre-bar {
+  padding: 0.6rem 2.5rem 0.7rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  display: flex;
+  gap: 0.8rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.sub-pills { opacity: 0.9; }
+.sub-pill { font-size: 0.55rem; padding: 0.24rem 0.6rem; }
+
 .pill {
   font-family: 'Space Mono', monospace;
   font-size: 0.58rem;
@@ -426,6 +439,9 @@ h1 em { font-style: italic; color: var(--accent); font-weight: 300; }
 
 .meta-tag.date { color: var(--accent); border-color: var(--accent); opacity: 0.7; }
 .meta-tag.label { color: var(--text-muted); border-color: var(--border); }
+.meta-tag.family { font-weight: 500; opacity: 0.85; }
+.meta-tag.family-ambient { color: var(--accent2); border-color: var(--accent2); }
+.meta-tag.family-jazz { color: var(--accent3); border-color: var(--accent3); }
 
 .card-note { font-size: 0.75rem; color: var(--text-muted); line-height: 1.6; font-weight: 300; }
 

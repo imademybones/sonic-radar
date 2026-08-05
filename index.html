@@ -11,14 +11,14 @@
 
 <header>
   <div class="header-wave"></div>
-  <div class="header-eyebrow">Ambient · Drone · Studio LPs</div>
+  <div class="header-eyebrow">Ambient · Jazz · Studio LPs</div>
   <h1>Sonic <em>Radar</em></h1>
   <div class="header-sub">A growing, collaborative catalogue · Sonic similarity, not just shared genre tags</div>
 </header>
 
 <div class="controls">
-  <span class="filter-label">Filter</span>
-  <div class="filter-pills" id="filterPills"></div>
+  <span class="filter-label">Genre</span>
+  <div class="filter-pills" id="familyPills"></div>
   <select class="month-select" id="sortSelect">
     <option value="newest">Newest</option>
     <option value="hearted">Most Hearted</option>
@@ -44,6 +44,11 @@
     ↑ Import
     <input type="file" id="importFile" accept=".json" style="display:none">
   </label>
+</div>
+
+<div class="subgenre-bar" id="subgenreBar" style="display:none">
+  <span class="filter-label">Within</span>
+  <div class="filter-pills sub-pills" id="subgenrePills"></div>
 </div>
 
 <div class="search-bar-wrap">
@@ -89,14 +94,17 @@
   </div>
   <div class="form-grid" style="grid-template-columns: 1fr; margin-bottom: 0.6rem;">
     <div class="form-field">
-      <label>Genre (select all that apply)</label>
-      <div class="genre-checks" id="genreChecks">
-        <label class="genre-check"><input type="checkbox" value="Drone / Textural"> Drone / Textural</label>
-        <label class="genre-check"><input type="checkbox" value="Field / Electroacoustic"> Field / Electroacoustic</label>
-        <label class="genre-check"><input type="checkbox" value="Dark / Hauntological"> Dark / Hauntological</label>
-        <label class="genre-check"><input type="checkbox" value="Dub / Textural Techno"> Dub / Textural Techno</label>
-        <label class="genre-check"><input type="checkbox" value="Kosmische / Space"> Kosmische / Space</label>
+      <label>Genre Family</label>
+      <div class="filter-pills" id="formFamilyToggle">
+        <button type="button" class="pill active" data-action="set-form-family" data-value="Ambient">Ambient</button>
+        <button type="button" class="pill" data-action="set-form-family" data-value="Jazz">Jazz</button>
       </div>
+    </div>
+  </div>
+  <div class="form-grid" style="grid-template-columns: 1fr; margin-bottom: 0.6rem;">
+    <div class="form-field">
+      <label>Genre (select all that apply)</label>
+      <div class="genre-checks" id="genreChecks"></div>
     </div>
   </div>
   <div class="form-note-row">
@@ -145,16 +153,23 @@ import {
 // else in this file talks only to this URL — never directly to Airtable.
 const WORKER_URL = 'https://sonic-radar-worker.stephen-nolan85.workers.dev';
 
-const PREFERRED_GENRE_ORDER = [
-  'Drone / Textural', 'Field / Electroacoustic', 'Dark / Hauntological',
-  'Dub / Textural Techno', 'Kosmische / Space',
-];
+// Genre is two-tier: a family (Ambient/Jazz/…) and a subgenre scoped to
+// that family. Adding a new family later is a data change (tag releases
+// with a new Genre Family value) plus one entry here for display order
+// and the add-form's checkbox list — everything else (filter pills,
+// dedup) is already data-driven off whatever families are present.
+const FAMILY_GENRES = {
+  'Ambient': ['Drone / Textural', 'Field / Electroacoustic', 'Dark / Hauntological', 'Dub / Textural Techno', 'Kosmische / Space'],
+  'Jazz': ['Spiritual / Atmospheric', 'Fusion / Contemporary', 'Avant-Garde / Free', 'Vocal / Global', 'Post-Bop / Hard Bop'],
+};
+const FAMILY_ORDER = ['Ambient', 'Jazz'];
 
 const CURATOR_KEY_STORAGE = 'sonicRadar_curatorKey';
 const HEARTED_STORAGE = 'sonicRadar_heartedIds';
 
 let releases = [];
-let activeFilter = 'all';
+let activeFamily = 'all'; // 'all' | 'community' | a Genre Family value
+let activeGenre = 'all'; // a subgenre value, only meaningful when activeFamily is a real family
 let activeMonth = 'full';
 let activeSort = 'newest';
 let searchQuery = '';
@@ -163,6 +178,7 @@ let pendingDeleteId = null;
 let pendingDeleteTimeout = null;
 let curatorKey = localStorage.getItem(CURATOR_KEY_STORAGE) || '';
 let heartedIds = new Set(JSON.parse(localStorage.getItem(HEARTED_STORAGE) || '[]'));
+let formFamily = 'Ambient';
 
 // ---- Worker CRUD ----
 // PATCH/DELETE send the curator passphrase if we have one — the Worker
@@ -209,18 +225,29 @@ async function deleteRelease(id) {
 
 // ---- Filtering ----
 
-function distinctGenres() {
+function distinctFamilies() {
   const present = new Set();
-  releases.forEach(r => (r.genre || []).forEach(g => present.add(g)));
-  const ordered = PREFERRED_GENRE_ORDER.filter(g => present.has(g));
-  const extra = [...present].filter(g => !PREFERRED_GENRE_ORDER.includes(g)).sort();
+  releases.forEach(r => { if (r.genreFamily) present.add(r.genreFamily); });
+  const ordered = FAMILY_ORDER.filter(f => present.has(f));
+  const extra = [...present].filter(f => !FAMILY_ORDER.includes(f)).sort();
+  return [...ordered, ...extra];
+}
+
+function distinctSubgenres(family) {
+  const present = new Set();
+  releases.forEach(r => { if (r.genreFamily === family) (r.genre || []).forEach(g => present.add(g)); });
+  const preferred = FAMILY_GENRES[family] || [];
+  const ordered = preferred.filter(g => present.has(g));
+  const extra = [...present].filter(g => !preferred.includes(g)).sort();
   return [...ordered, ...extra];
 }
 
 function matchesFilter(r) {
-  if (activeFilter === 'all') return true;
-  if (activeFilter === 'community') return r.source === 'community';
-  return (r.genre || []).includes(activeFilter);
+  if (activeFamily === 'community') return r.source === 'community';
+  if (activeFamily === 'all') return true;
+  if (r.genreFamily !== activeFamily) return false;
+  if (activeGenre === 'all') return true;
+  return (r.genre || []).includes(activeGenre);
 }
 
 function matchesMonth(r) {
@@ -248,22 +275,41 @@ function highlight(text, q) {
 
 // ---- Render: filter pills ----
 
-function renderFilterPills() {
-  const el = document.getElementById('filterPills');
+function renderFamilyPills() {
+  const el = document.getElementById('familyPills');
   const pills = [
     { value: 'all', label: 'All' },
-    ...distinctGenres().map(g => ({ value: g, label: g })),
+    ...distinctFamilies().map(f => ({ value: f, label: f })),
     { value: 'community', label: 'Community Adds' },
   ];
   el.innerHTML = pills.map(p => `
-    <button class="pill${p.value === activeFilter ? ' active' : ''}" data-action="set-filter" data-value="${esc(p.value)}">${esc(p.label)}</button>
+    <button class="pill${p.value === activeFamily ? ' active' : ''}" data-action="set-family" data-value="${esc(p.value)}">${esc(p.label)}</button>
+  `).join('');
+}
+
+function renderSubgenrePills() {
+  const bar = document.getElementById('subgenreBar');
+  const el = document.getElementById('subgenrePills');
+  if (activeFamily === 'all' || activeFamily === 'community') {
+    bar.style.display = 'none';
+    el.innerHTML = '';
+    return;
+  }
+  bar.style.display = '';
+  const pills = [
+    { value: 'all', label: `All ${activeFamily}` },
+    ...distinctSubgenres(activeFamily).map(g => ({ value: g, label: g })),
+  ];
+  el.innerHTML = pills.map(p => `
+    <button class="pill sub-pill${p.value === activeGenre ? ' active' : ''}" data-action="set-genre" data-value="${esc(p.value)}">${esc(p.label)}</button>
   `).join('');
 }
 
 // ---- Render: grid ----
 
 function render() {
-  renderFilterPills();
+  renderFamilyPills();
+  renderSubgenrePills();
   updateCuratorUI();
   const grid = document.getElementById('albumGrid');
   const filtered = releases.filter(r => matchesFilter(r) && matchesMonth(r) && matchesSearch(r));
@@ -303,6 +349,12 @@ function render() {
   });
 }
 
+function familyTag(family) {
+  if (!family) return '';
+  const slug = family.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  return `<span class="meta-tag family family-${slug}">${esc(family)}</span>`;
+}
+
 function card(r, num) {
   const tags = (r.genre || []).map(g => `<span class="meta-tag">${esc(g)}</span>`).join('');
   const badge = r.source === 'community' ? '<span class="badge-community">Community</span>' : '';
@@ -326,6 +378,7 @@ function card(r, num) {
       <div class="card-meta">
         ${r.releaseDate ? `<span class="meta-tag date">${esc(formatMonthLabel(r.releaseDate))}</span>` : ''}
         ${r.label ? `<span class="meta-tag label">${highlight(r.label, q)}</span>` : ''}
+        ${familyTag(r.genreFamily)}
         ${tags}
       </div>
       ${r.notes ? `<div class="card-note">${highlight(r.notes, q)}</div>` : ''}
@@ -378,6 +431,7 @@ function openModal(id) {
         <div class="card-meta">
           ${target.releaseDate ? `<span class="meta-tag date">${esc(formatMonthLabel(target.releaseDate))}</span>` : ''}
           ${target.label ? `<span class="meta-tag label">${esc(target.label)}</span>` : ''}
+          ${familyTag(target.genreFamily)}
           ${(target.genre || []).map(g => `<span class="meta-tag">${esc(g)}</span>`).join('')}
         </div>
         ${target.notes ? `<div class="modal-note">${esc(target.notes)}</div>` : ''}
@@ -487,6 +541,17 @@ async function commitDelete(id) {
   }
 }
 
+function renderFormGenreChecks() {
+  const el = document.getElementById('genreChecks');
+  const subgenres = FAMILY_GENRES[formFamily] || [];
+  el.innerHTML = subgenres.map(g => `
+    <label class="genre-check"><input type="checkbox" value="${esc(g)}"> ${esc(g)}</label>
+  `).join('');
+  document.querySelectorAll('#formFamilyToggle .pill').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.value === formFamily);
+  });
+}
+
 async function submitAdd() {
   const artist = document.getElementById('f-artist').value.trim();
   const title = document.getElementById('f-title').value.trim();
@@ -499,6 +564,7 @@ async function submitAdd() {
     artist, title,
     releaseDate: document.getElementById('f-date').value || '',
     label: document.getElementById('f-label').value.trim(),
+    genreFamily: formFamily,
     genre,
     notes: document.getElementById('f-note').value.trim(),
     spotifyUrl: document.getElementById('f-spotify').value.trim(),
@@ -568,9 +634,18 @@ document.addEventListener('click', (e) => {
   const id = target.dataset.id;
 
   switch (action) {
-    case 'set-filter':
-      activeFilter = target.dataset.value;
+    case 'set-family':
+      activeFamily = target.dataset.value;
+      activeGenre = 'all';
       render();
+      break;
+    case 'set-genre':
+      activeGenre = target.dataset.value;
+      render();
+      break;
+    case 'set-form-family':
+      formFamily = target.dataset.value;
+      renderFormGenreChecks();
       break;
     case 'toggle-add-form': {
       const wrap = document.getElementById('addFormWrap');
@@ -652,6 +727,7 @@ document.addEventListener('keydown', (e) => {
 
 async function init() {
   updateCuratorUI();
+  renderFormGenreChecks();
   try {
     releases = await loadReleases();
     render();
