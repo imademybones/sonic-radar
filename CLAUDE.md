@@ -4,11 +4,11 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 ## What this is
 
-A **public, collaborative** discovery tool for studio LP releases —
-currently ambient/drone-adjacent only by deliberate choice (building
-depth in one genre before expanding), though the architecture doesn't
-hardcode that. Anyone can add a release or heart one; no accounts, no
-login. `index.html` (markup + `<script type="module">`) plus
+A **public, collaborative** discovery tool for studio LP releases,
+spanning two genre families — **Ambient** and **Jazz** — with the
+architecture built to add more later without a rewrite. Anyone can add
+a release or heart one; no accounts, no login. `index.html` (markup +
+`<script type="module">`) plus
 `styles.css`, with pure helper/scoring logic factored out to `lib/pure.js`.
 No build step, no package manager, no framework — served as a static
 file (GitHub Pages) directly from `index.html`.
@@ -105,8 +105,10 @@ key handling) first.
 
 **Data model.** A `release` object (`recordToRelease`/`releaseToFields`
 in `lib/pure.js`) has: `id`, `artist`, `title`, `releaseDate` (ISO
-`YYYY-MM-DD`), `label`, `genre` (array of full display strings like
-`"Drone / Textural"`, not short codes), `texture`/`tone`/`character`
+`YYYY-MM-DD`), `label`, `genreFamily` (`"Ambient"` | `"Jazz"`, defaults
+to `"Ambient"` on write if omitted), `genre` (array of full display
+strings like `"Drone / Textural"`, not short codes — scoped to
+`genreFamily`, see "Genre navigation" above), `texture`/`tone`/`character`
 (descriptor tag arrays), `density`/`motion` (1–5 or `null`), `notes`,
 `source` (`curated` | `community`), `hearts` (number, aggregate),
 `spotifyUrl`, `addedBy` (free-text, optional, no verification it's real),
@@ -117,14 +119,22 @@ before the collaborative pivot and doesn't have a coherent meaning when
 "who listened" could be any visitor; see the git history around the
 collaborative-pivot commit if you need the old semantics for reference.
 
-**Genre is data-driven, not hardcoded.** The filter pill row is built
-from the distinct `Genre` values present in loaded data (plus fixed
-`All`/`Community Adds` pills), not a static list — so adding a new genre
-later (the whole point of eventually expanding past ambient) is an
-Airtable-choices change, not a code change. The add form's genre
-checkboxes are still a fixed list matching the current Airtable choices
-(`index.html`, `#genreChecks`) — update that list by hand when a new
-genre choice is added to Airtable.
+**Genre navigation is two-tier — Genre Family, then Genre (subgenre) —
+and both levels are data-driven.** A release has a `Genre Family`
+singleSelect (`Ambient` or `Jazz`) plus a `Genre` multipleSelects field
+whose choices are scoped to that family (5 subgenres each — see
+`FAMILY_GENRES` in `index.html`). The UI renders family pills first
+(`renderFamilyPills`, from `distinctFamilies()`), then a second row of
+subgenre pills scoped to whichever family is active
+(`renderSubgenrePills`, from `distinctSubgenres(family)`) — both
+computed from what's actually present in loaded data, not hardcoded, so
+a new subgenre added to Airtable just shows up. `FAMILY_GENRES` itself
+*is* a hardcoded map (it also drives the add-form's genre checkboxes via
+`renderFormGenreChecks`) — adding a whole new family (a third genre
+beyond Ambient/Jazz) means updating `FAMILY_GENRES` and `FAMILY_ORDER`
+in `index.html`, not just an Airtable-choices change. `matchesFilter()`
+handles the two-tier logic plus the special-case `Community Adds` pill
+(filters on `source`, not `genreFamily`/`genre`).
 
 **Spotify previews are contributor-pasted links, not an API integration.**
 `spotifyEmbedUrl()` in `lib/pure.js` normalizes whatever a contributor
@@ -164,6 +174,12 @@ Character/Density/Motion (similarity scoring degrades gracefully — see
 pass, propose values for review (e.g. in a Claude Code session, drawing
 on the curatorial `notes` text) rather than writing directly to Airtable
 un-reviewed — this was an explicit user decision, not just caution.
+The Texture/Tone/Character/Density/Motion vocabulary is deliberately
+genre-agnostic — it needed no jazz-specific redesign when the Jazz
+family was added, and cross-genre similarity (an ambient release
+scoring high against a jazz one) is allowed and intentional, not a bug
+to filter out. `scoreSimilarity` in `lib/pure.js` never restricts by
+`genreFamily`.
 
 **`esc()` (in `lib/pure.js`) must wrap any user-provided string
 interpolated into `innerHTML`** (artist, title, label, notes, genre/

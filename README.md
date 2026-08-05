@@ -1,10 +1,12 @@
 # Sonic Radar
 
-A curated tracker and discovery tool for studio LP releases — starting
-with ambient/drone-adjacent music, built to expand into other genres over
-time. Surfaces genuinely **sonic** similarity between releases (shared
+A public, collaborative discovery tool for studio LP releases, spanning
+two genre families — **Ambient** and **Jazz** — with two-tier
+family/subgenre navigation, and built to add more families over time.
+Surfaces genuinely **sonic** similarity between releases (shared
 texture, tone, character, density, motion, plus release-year proximity),
-not just shared genre tags.
+not just shared genre tags — and that similarity deliberately crosses
+genre families.
 
 No build step, no framework — a static `index.html` backed by Airtable
 via a Cloudflare Worker. See `CLAUDE.md` for architecture notes and

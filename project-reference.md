@@ -15,14 +15,22 @@ app is fully built and verified. See the plan this was built from
 steps: branding text + `<title>` + `CNAME` + Worker `ALLOWED_ORIGIN` swap
 in both repos, plus the account-level DNS/Cloudflare reassignment.
 
-## Product direction — status as of 2026-08-04
+## Product direction — status as of 2026-08-05
 
-Staying **ambient-only deliberately** for now, focused on building out
-catalogue depth before expanding genres. Pivoted from a personal
-curated tool to a **public, collaborative** one: anyone can add a
-release or heart it, no login. Editing/deleting requires a shared
-curator passphrase (Stephen's). See CLAUDE.md "Collaborative write
-model" for the full reasoning and its limits.
+Pivoted from a personal curated tool to a **public, collaborative** one:
+anyone can add a release or heart it, no login. Editing/deleting
+requires a shared curator passphrase (Stephen's). See CLAUDE.md
+"Collaborative write model" for the full reasoning and its limits.
+
+Expanded past ambient-only on 2026-08-05: **Jazz** is now a second
+Genre Family alongside Ambient, with 81 releases imported from the
+`jazz-radar-v8.html` prototype tracker. Catalogue is now 117 releases
+total (36 Ambient + 81 Jazz). Genre navigation is two-tier — pick a
+Genre Family pill (Ambient/Jazz), then a Genre (subgenre) pill scoped to
+that family — see CLAUDE.md "Genre is data-driven" for the field
+structure. The descriptor vocabulary (Texture/Tone/Character/Density/
+Motion) needed no jazz-specific redesign; it was already genre-agnostic
+and validated across both families during this import.
 
 ## Airtable
 
@@ -41,7 +49,8 @@ Fields (name → id):
 | Title | `fldWROCiNkYUMGPhj` | singleLineText |
 | Label | `fldvlVzKK8gX4PJTA` | singleLineText |
 | Release Date | `fldFHnho6rGkfSeqc` | date (ISO) |
-| Genre | `fldzCScZDb7yWXFP9` | multipleSelects |
+| Genre Family | `fldG8aRWyxsQx5pwf` | singleSelect (`Ambient`, `Jazz`) |
+| Genre | `fldzCScZDb7yWXFP9` | multipleSelects (subgenre, scoped to Genre Family — see CLAUDE.md) |
 | Descriptor: Texture | `fldWtmzyRetfowEnm` | multipleSelects |
 | Descriptor: Tone | `fldIUhF98Wx0QQubi` | multipleSelects |
 | Descriptor: Character | `fld8caeVyV0lCULl0` | multipleSelects |
@@ -76,6 +85,16 @@ fallbacks: Hild, Only Came To Say Goodbye); the remaining 3
 Bandcamp-only releases (Culatra, music* *?, Piano Works) got
 `Bandcamp URL` links instead, so every seed release has some preview
 path.
+
+**Jazz import (2026-08-05):** 81 releases from `jazz-radar-v8.html`'s
+seed data (Downloads) were imported with `Genre Family: Jazz`, mapped
+onto 5 new Genre subgenre choices (`Spiritual / Atmospheric`, `Fusion /
+Contemporary`, `Avant-Garde / Free`, `Vocal / Global`, `Post-Bop / Hard
+Bop` — added to the Genre field's choices via the `typecast: true`
+temp-record trick, same as the `community` Source option earlier) and
+descriptor-tagged (Texture/Tone/Character/Density/Motion) the same day.
+No Spotify/Bandcamp backfill was done for this batch — links can be
+added by contributors as they're found.
 
 ## Cloudflare Worker
 
