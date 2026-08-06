@@ -185,7 +185,7 @@ and cross-genre similarity (an ambient release scoring high against a
 jazz or metal one) is allowed and intentional, not a bug to filter out.
 `scoreSimilarity` in `lib/pure.js` never restricts by `genreFamily`.
 
-**The Metal family (83 releases) was imported from a different source
+**The Metal family (76 releases) was imported from a different source
 than Ambient/Jazz — the sibling `music-tracker` app's own Airtable
 base** (a personal listening log, not a curated prototype), filtered to
 records whose free-text `Genre` field matched a metal/extreme-metal
@@ -202,7 +202,15 @@ bumps Motion) — this is a lighter-touch process than the fully
 hand-reviewed pass used for the Jazz import, a deliberate trade-off for
 scale rather than an oversight. If it produces bad matches in practice,
 re-tagging individual releases through the normal edit path is fine;
-don't assume the archetype table is precise.
+don't assume the archetype table is precise. 7 of the original 83
+`music-tracker` matches had future release dates (the personal log
+tracks upcoming releases the user hasn't heard yet) and were deleted
+before this import counted as final — **sonic similarity is a comparison
+between real, heard releases, so an unreleased album has nothing genuine
+to compare yet.** This is a standing constraint, not a one-time cleanup:
+any future import (a new genre family, a re-sync from `music-tracker`,
+etc.) must filter to `Release Date <= today` before writing, the same
+way this batch was corrected.
 
 **`esc()` (in `lib/pure.js`) must wrap any user-provided string
 interpolated into `innerHTML`** (artist, title, label, notes, genre/

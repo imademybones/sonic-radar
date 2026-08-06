@@ -27,15 +27,19 @@ Genre Family alongside Ambient, with 81 releases imported from the
 `jazz-radar-v8.html` prototype tracker.
 
 Expanded to a third family on 2026-08-06: **Metal**, with 83 releases
-imported from the sibling `music-tracker` app's Airtable base (a
-personal listening log — see "Metal import" below). Catalogue is now
-**200 releases total** (36 Ambient + 81 Jazz + 83 Metal). Genre
-navigation is two-tier — pick a Genre Family pill (Ambient/Jazz/Metal),
-then a Genre (subgenre) pill scoped to that family — see CLAUDE.md
-"Genre navigation is two-tier" for the field structure. The descriptor
-vocabulary (Texture/Tone/Character/Density/Motion) needed no
-family-specific redesign; it was already genre-agnostic and validated
-across all three families during these imports.
+initially imported from the sibling `music-tracker` app's Airtable base
+(a personal listening log — see "Metal import" below), then trimmed to
+**76** after removing 7 with future release dates — sonic similarity
+needs a release to actually exist to compare against, so unreleased
+albums are excluded from every family on principle, not just cleaned up
+this once (see CLAUDE.md). Catalogue is now **193 releases total**
+(36 Ambient + 81 Jazz + 76 Metal). Genre navigation is two-tier — pick a
+Genre Family pill (Ambient/Jazz/Metal), then a Genre (subgenre) pill
+scoped to that family — see CLAUDE.md "Genre navigation is two-tier"
+for the field structure. The descriptor vocabulary (Texture/Tone/
+Character/Density/Motion) needed no family-specific redesign; it was
+already genre-agnostic and validated across all three families during
+these imports.
 
 ## Airtable
 
@@ -101,7 +105,7 @@ descriptor-tagged (Texture/Tone/Character/Density/Motion) the same day.
 No Spotify/Bandcamp backfill was done for this batch — links can be
 added by contributors as they're found.
 
-**Metal import (2026-08-06):** 83 releases pulled from the sibling
+**Metal import (2026-08-06):** 83 releases initially pulled from the sibling
 `music-tracker` app's own Airtable base (`appnE86WFyrqsel7S`, table
 `tblIqRLQ6FznjfljN`) — a personal listening log, not a curated
 prototype — filtered to records whose free-text `Genre` field matched a
@@ -120,7 +124,13 @@ Genre subgenre choices (`Death Metal`, `Black Metal`, `Doom / Sludge`,
 backfill was done. Descriptor tagging used a scripted per-subgenre
 archetype pass rather than a fully hand-reviewed one — see CLAUDE.md
 "The Metal family... was imported from a different source" for why and
-what that trades off.
+what that trades off. **7 of the 83 had future release dates** (Mastodon
+– Marrow Deep, 156/Silence – From a Distance, Emma Ruth Rundle – These
+Killing Times, Brat – Manslayer, The Ocean – Solaris, Frontierer –
+Ultraviolet Parasite, Cult of Luna – In the Shadow of Your Shadow — all
+Aug–Nov 2026) and were deleted the same day once spotted: sonic
+similarity can't be computed against a release nobody's heard yet.
+Final count: **76**.
 
 ## Cloudflare Worker
 
