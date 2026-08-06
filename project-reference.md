@@ -32,8 +32,11 @@ initially imported from the sibling `music-tracker` app's Airtable base
 **76** after removing 7 with future release dates — sonic similarity
 needs a release to actually exist to compare against, so unreleased
 albums are excluded from every family on principle, not just cleaned up
-this once (see CLAUDE.md). Catalogue is now **193 releases total**
-(36 Ambient + 81 Jazz + 76 Metal). Genre navigation is two-tier — pick a
+this once (see CLAUDE.md). A follow-up sweep of the *entire* catalogue
+(2026-08-06) found one more — Lawrence English's "The Rest Is My Ghost"
+(Ambient), due 2026-08-07 — removed the same way; the rule applies
+app-wide, not just to the Metal import. Catalogue is now **192 releases
+total** (35 Ambient + 81 Jazz + 76 Metal). Genre navigation is two-tier — pick a
 Genre Family pill (Ambient/Jazz/Metal), then a Genre (subgenre) pill
 scoped to that family — see CLAUDE.md "Genre navigation is two-tier"
 for the field structure. The descriptor vocabulary (Texture/Tone/

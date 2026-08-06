@@ -172,6 +172,17 @@ touching the scoring formula). Same-artist releases are excluded from
 don't fold those back together, an artist's own discography would
 otherwise crowd out genuinely different-sounding matches.
 
+**Unreleased albums don't belong in the catalogue, in any family.**
+Sonic similarity is a comparison between records that actually exist to
+be heard — an album with a future `Release Date` has nothing genuine to
+compare yet, so it gets removed on sight rather than added "for later."
+This was caught twice on 2026-08-06: 7 of 83 Metal imports had future
+dates, and a follow-up full-catalogue sweep found one more in Ambient
+(added earlier that same day, releasing the next day) — the rule is
+app-wide, not specific to the Metal import it was first noticed on. Any
+import or discovery-sweep addition must filter to `Release Date <=
+today` before writing.
+
 **Descriptor tagging is a separate, reviewed step — not automated
 end-to-end.** New/seed releases can exist with blank Texture/Tone/
 Character/Density/Motion (similarity scoring degrades gracefully — see
@@ -204,13 +215,8 @@ scale rather than an oversight. If it produces bad matches in practice,
 re-tagging individual releases through the normal edit path is fine;
 don't assume the archetype table is precise. 7 of the original 83
 `music-tracker` matches had future release dates (the personal log
-tracks upcoming releases the user hasn't heard yet) and were deleted
-before this import counted as final — **sonic similarity is a comparison
-between real, heard releases, so an unreleased album has nothing genuine
-to compare yet.** This is a standing constraint, not a one-time cleanup:
-any future import (a new genre family, a re-sync from `music-tracker`,
-etc.) must filter to `Release Date <= today` before writing, the same
-way this batch was corrected.
+tracks upcoming releases the user hasn't heard yet) and were removed —
+see "Unreleased albums don't belong in the catalogue" above.
 
 **`esc()` (in `lib/pure.js`) must wrap any user-provided string
 interpolated into `innerHTML`** (artist, title, label, notes, genre/
