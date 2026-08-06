@@ -7,6 +7,7 @@
   --accent: #7eb4d4;
   --accent2: #a8c8a0;
   --accent3: #c4a0c0;
+  --accent4: #c0806e;
   --text: #d8e8f0;
   --text-muted: #607080;
   --text-dim: #364858;
@@ -442,6 +443,7 @@ h1 em { font-style: italic; color: var(--accent); font-weight: 300; }
 .meta-tag.family { font-weight: 500; opacity: 0.85; }
 .meta-tag.family-ambient { color: var(--accent2); border-color: var(--accent2); }
 .meta-tag.family-jazz { color: var(--accent3); border-color: var(--accent3); }
+.meta-tag.family-metal { color: var(--accent4); border-color: var(--accent4); }
 
 .card-note { font-size: 0.75rem; color: var(--text-muted); line-height: 1.6; font-weight: 300; }
 

@@ -1,9 +1,9 @@
 # Sonic Radar
 
 A public, collaborative discovery tool for studio LP releases, spanning
-two genre families — **Ambient** and **Jazz** — with two-tier
-family/subgenre navigation, and built to add more families over time.
-Surfaces genuinely **sonic** similarity between releases (shared
+three genre families — **Ambient**, **Jazz**, and **Metal** — with
+two-tier family/subgenre navigation, and built to add more families over
+time. Surfaces genuinely **sonic** similarity between releases (shared
 texture, tone, character, density, motion, plus release-year proximity),
 not just shared genre tags — and that similarity deliberately crosses
 genre families.

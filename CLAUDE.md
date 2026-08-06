@@ -5,8 +5,8 @@ This file provides guidance to Claude Code when working with code in this reposi
 ## What this is
 
 A **public, collaborative** discovery tool for studio LP releases,
-spanning two genre families — **Ambient** and **Jazz** — with the
-architecture built to add more later without a rewrite. Anyone can add
+spanning three genre families — **Ambient**, **Jazz**, and **Metal** —
+with the architecture built to add more later without a rewrite. Anyone can add
 a release or heart one; no accounts, no login. `index.html` (markup +
 `<script type="module">`) plus
 `styles.css`, with pure helper/scoring logic factored out to `lib/pure.js`.
@@ -105,8 +105,8 @@ key handling) first.
 
 **Data model.** A `release` object (`recordToRelease`/`releaseToFields`
 in `lib/pure.js`) has: `id`, `artist`, `title`, `releaseDate` (ISO
-`YYYY-MM-DD`), `label`, `genreFamily` (`"Ambient"` | `"Jazz"`, defaults
-to `"Ambient"` on write if omitted), `genre` (array of full display
+`YYYY-MM-DD`), `label`, `genreFamily` (`"Ambient"` | `"Jazz"` | `"Metal"`,
+defaults to `"Ambient"` on write if omitted), `genre` (array of full display
 strings like `"Drone / Textural"`, not short codes — scoped to
 `genreFamily`, see "Genre navigation" above), `texture`/`tone`/`character`
 (descriptor tag arrays), `density`/`motion` (1–5 or `null`), `notes`,
@@ -121,20 +121,25 @@ collaborative-pivot commit if you need the old semantics for reference.
 
 **Genre navigation is two-tier — Genre Family, then Genre (subgenre) —
 and both levels are data-driven.** A release has a `Genre Family`
-singleSelect (`Ambient` or `Jazz`) plus a `Genre` multipleSelects field
-whose choices are scoped to that family (5 subgenres each — see
-`FAMILY_GENRES` in `index.html`). The UI renders family pills first
-(`renderFamilyPills`, from `distinctFamilies()`), then a second row of
-subgenre pills scoped to whichever family is active
-(`renderSubgenrePills`, from `distinctSubgenres(family)`) — both
-computed from what's actually present in loaded data, not hardcoded, so
-a new subgenre added to Airtable just shows up. `FAMILY_GENRES` itself
-*is* a hardcoded map (it also drives the add-form's genre checkboxes via
-`renderFormGenreChecks`) — adding a whole new family (a third genre
-beyond Ambient/Jazz) means updating `FAMILY_GENRES` and `FAMILY_ORDER`
-in `index.html`, not just an Airtable-choices change. `matchesFilter()`
-handles the two-tier logic plus the special-case `Community Adds` pill
-(filters on `source`, not `genreFamily`/`genre`).
+singleSelect (`Ambient`, `Jazz`, or `Metal`) plus a `Genre` multipleSelects
+field whose choices are scoped to that family (5 subgenres each — see
+`FAMILY_GENRES` in `index.html`; Metal's are `Death Metal`, `Black Metal`,
+`Doom / Sludge`, `Metalcore / Mathcore`, `Post-Metal / Progressive` —
+consolidated buckets, not the ~20 fine-grained genre strings the source
+data used, since a two-tier pill row needs a small, browsable set).
+The UI renders family pills first (`renderFamilyPills`, from
+`distinctFamilies()`), then a second row of subgenre pills scoped to
+whichever family is active (`renderSubgenrePills`, from
+`distinctSubgenres(family)`) — both computed from what's actually present
+in loaded data, not hardcoded, so a new subgenre added to Airtable just
+shows up. `FAMILY_GENRES` itself *is* a hardcoded map (it also drives the
+add-form's genre checkboxes via `renderFormGenreChecks`) — adding a whole
+new family means updating `FAMILY_GENRES` and `FAMILY_ORDER` in
+`index.html`, not just an Airtable-choices change (see the `family-metal`
+CSS badge color in `styles.css` — `--accent4` — for the other place a new
+family touches). `matchesFilter()` handles the two-tier logic plus the
+special-case `Community Adds` pill (filters on `source`, not
+`genreFamily`/`genre`).
 
 **Spotify previews are contributor-pasted links, not an API integration.**
 `spotifyEmbedUrl()` in `lib/pure.js` normalizes whatever a contributor
@@ -175,11 +180,29 @@ pass, propose values for review (e.g. in a Claude Code session, drawing
 on the curatorial `notes` text) rather than writing directly to Airtable
 un-reviewed — this was an explicit user decision, not just caution.
 The Texture/Tone/Character/Density/Motion vocabulary is deliberately
-genre-agnostic — it needed no jazz-specific redesign when the Jazz
-family was added, and cross-genre similarity (an ambient release
-scoring high against a jazz one) is allowed and intentional, not a bug
-to filter out. `scoreSimilarity` in `lib/pure.js` never restricts by
-`genreFamily`.
+genre-agnostic — it needed no redesign when Jazz or Metal were added,
+and cross-genre similarity (an ambient release scoring high against a
+jazz or metal one) is allowed and intentional, not a bug to filter out.
+`scoreSimilarity` in `lib/pure.js` never restricts by `genreFamily`.
+
+**The Metal family (83 releases) was imported from a different source
+than Ambient/Jazz — the sibling `music-tracker` app's own Airtable
+base** (a personal listening log, not a curated prototype), filtered to
+records whose free-text `Genre` field matched a metal/extreme-metal
+vocabulary (hardcore/punk-family genres like Metallic Hardcore,
+Post-Hardcore, Powerviolence, and Screamo were deliberately excluded as
+a different genre family, even though metal-adjacent). Given the batch
+size, descriptor tagging here used a scripted per-subgenre archetype
+(each of the ~20 raw genre strings like "Technical Death Metal" or
+"Atmospheric Black Metal" has its own baseline Texture/Tone/Character/
+Density/Motion profile, not one flat "Metal" profile) plus deterministic
+per-record jitter and keyword nuance pulled from the personal notes text
+where present (e.g. "raw production" → adds Tape-hiss/Analog-noise and
+bumps Motion) — this is a lighter-touch process than the fully
+hand-reviewed pass used for the Jazz import, a deliberate trade-off for
+scale rather than an oversight. If it produces bad matches in practice,
+re-tagging individual releases through the normal edit path is fine;
+don't assume the archetype table is precise.
 
 **`esc()` (in `lib/pure.js`) must wrap any user-provided string
 interpolated into `innerHTML`** (artist, title, label, notes, genre/

@@ -24,13 +24,18 @@ requires a shared curator passphrase (Stephen's). See CLAUDE.md
 
 Expanded past ambient-only on 2026-08-05: **Jazz** is now a second
 Genre Family alongside Ambient, with 81 releases imported from the
-`jazz-radar-v8.html` prototype tracker. Catalogue is now 117 releases
-total (36 Ambient + 81 Jazz). Genre navigation is two-tier — pick a
-Genre Family pill (Ambient/Jazz), then a Genre (subgenre) pill scoped to
-that family — see CLAUDE.md "Genre is data-driven" for the field
-structure. The descriptor vocabulary (Texture/Tone/Character/Density/
-Motion) needed no jazz-specific redesign; it was already genre-agnostic
-and validated across both families during this import.
+`jazz-radar-v8.html` prototype tracker.
+
+Expanded to a third family on 2026-08-06: **Metal**, with 83 releases
+imported from the sibling `music-tracker` app's Airtable base (a
+personal listening log — see "Metal import" below). Catalogue is now
+**200 releases total** (36 Ambient + 81 Jazz + 83 Metal). Genre
+navigation is two-tier — pick a Genre Family pill (Ambient/Jazz/Metal),
+then a Genre (subgenre) pill scoped to that family — see CLAUDE.md
+"Genre navigation is two-tier" for the field structure. The descriptor
+vocabulary (Texture/Tone/Character/Density/Motion) needed no
+family-specific redesign; it was already genre-agnostic and validated
+across all three families during these imports.
 
 ## Airtable
 
@@ -49,7 +54,7 @@ Fields (name → id):
 | Title | `fldWROCiNkYUMGPhj` | singleLineText |
 | Label | `fldvlVzKK8gX4PJTA` | singleLineText |
 | Release Date | `fldFHnho6rGkfSeqc` | date (ISO) |
-| Genre Family | `fldG8aRWyxsQx5pwf` | singleSelect (`Ambient`, `Jazz`) |
+| Genre Family | `fldG8aRWyxsQx5pwf` | singleSelect (`Ambient`, `Jazz`, `Metal`) |
 | Genre | `fldzCScZDb7yWXFP9` | multipleSelects (subgenre, scoped to Genre Family — see CLAUDE.md) |
 | Descriptor: Texture | `fldWtmzyRetfowEnm` | multipleSelects |
 | Descriptor: Tone | `fldIUhF98Wx0QQubi` | multipleSelects |
@@ -95,6 +100,27 @@ temp-record trick, same as the `community` Source option earlier) and
 descriptor-tagged (Texture/Tone/Character/Density/Motion) the same day.
 No Spotify/Bandcamp backfill was done for this batch — links can be
 added by contributors as they're found.
+
+**Metal import (2026-08-06):** 83 releases pulled from the sibling
+`music-tracker` app's own Airtable base (`appnE86WFyrqsel7S`, table
+`tblIqRLQ6FznjfljN`) — a personal listening log, not a curated
+prototype — filtered to records whose free-text `Genre` field matched a
+metal vocabulary (Death Metal, Black Metal, Doom/Sludge, Metalcore/
+Mathcore, Post-Metal/Progressive and their finer-grained variants like
+Technical/Brutal/Dissonant/Blackened Death Metal, Atmospheric Black
+Metal, etc.). Hardcore/punk-family genres present in the same source
+table (Metallic Hardcore, Post-Hardcore, Powerviolence, Screamo) were
+deliberately excluded as a different genre family, even though
+metal-adjacent — see CLAUDE.md if that boundary needs revisiting.
+Imported with `Genre Family: Metal`, mapped onto 5 new consolidated
+Genre subgenre choices (`Death Metal`, `Black Metal`, `Doom / Sludge`,
+`Metalcore / Mathcore`, `Post-Metal / Progressive` — added via the same
+`typecast: true` temp-record trick). Release dates and Spotify URLs
+(where present in the source) were carried over as-is; no Bandcamp
+backfill was done. Descriptor tagging used a scripted per-subgenre
+archetype pass rather than a fully hand-reviewed one — see CLAUDE.md
+"The Metal family... was imported from a different source" for why and
+what that trades off.
 
 ## Cloudflare Worker
 
