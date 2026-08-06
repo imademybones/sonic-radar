@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sonic Radar</title>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Space+Mono:wght@400;700&family=DM+Sans:wght@200;300;400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Space+Mono:wght@400;700&family=DM+Sans:wght@200;300;400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -180,6 +180,56 @@ let pendingDeleteTimeout = null;
 let curatorKey = localStorage.getItem(CURATOR_KEY_STORAGE) || '';
 let heartedIds = new Set(JSON.parse(localStorage.getItem(HEARTED_STORAGE) || '[]'));
 let formFamily = 'Ambient';
+
+// ---- Cover art (iTunes Search API, client-side, session-only) ----
+// Mirrors music-tracker's cover-art pattern, but simpler: no Airtable
+// persistence, since Sonic Radar's PATCH route is curator-gated and
+// writing a resolved URL back for every visitor's lookup isn't
+// something an anonymous contributor should be able to trigger. Each
+// session just re-resolves via iTunes and caches in memory for its
+// own lifetime — a small repeat-fetch cost, not a correctness issue.
+const coverCache = {};
+
+function coverKey(artist, title) {
+  return `${(artist || '').trim().toLowerCase()}|||${(title || '').trim().toLowerCase()}`;
+}
+
+async function fetchCover(release) {
+  const key = coverKey(release.artist, release.title);
+  if (key in coverCache) return coverCache[key];
+  coverCache[key] = undefined; // in-flight marker
+  try {
+    const term = `${release.artist || ''} ${release.title || ''}`.trim();
+    const params = new URLSearchParams({ term, entity: 'album', limit: '1' });
+    const res = await fetch(`https://itunes.apple.com/search?${params.toString()}`);
+    const data = await res.json();
+    const hit = data.results && data.results[0];
+    coverCache[key] = hit && hit.artworkUrl100
+      ? hit.artworkUrl100.replace('100x100', '300x300')
+      : null;
+  } catch (e) {
+    coverCache[key] = null;
+  }
+  render();
+  return coverCache[key];
+}
+
+// Returns cover art markup for a release, kicking off a background
+// iTunes lookup the first time a given artist/title pair is rendered.
+// `variant` picks the CSS class (card grid tile vs the larger modal
+// header) and whether a re-render is worth triggering on load.
+function coverHtml(release, variant) {
+  const imgClass = variant === 'modal' ? 'modal-cover' : 'card-cover';
+  const placeholderClass = variant === 'modal' ? 'modal-cover-placeholder' : 'card-cover-placeholder';
+  const key = coverKey(release.artist, release.title);
+  const cached = coverCache[key];
+  if (cached === undefined) {
+    if (!(key in coverCache)) fetchCover(release);
+    return `<div class="${placeholderClass}">♪</div>`;
+  }
+  if (!cached) return `<div class="${placeholderClass}">♪</div>`;
+  return `<img class="${imgClass} cover-loading" onload="this.classList.add('cover-loaded')" src="${esc(cached)}" alt="" loading="lazy">`;
+}
 
 // ---- Worker CRUD ----
 // PATCH/DELETE send the curator passphrase if we have one — the Worker
@@ -369,25 +419,28 @@ function card(r, num) {
   const isHearted = heartedIds.has(r.id);
   return `
     <div class="album-card">
-      ${badge}
-      <div class="card-number">
-        <span>${String(num).padStart(2, '0')}</span>
+      <div class="card-cover-wrap" data-action="open-modal" data-id="${r.id}">
+        ${coverHtml(r, 'card')}
+        <span class="card-number">${String(num).padStart(2, '0')}</span>
+        ${badge}
         ${deleteBtn}
       </div>
-      <div class="card-artist" data-action="open-modal" data-id="${r.id}">${highlight(r.artist, q)}</div>
-      <div class="card-title" data-action="open-modal" data-id="${r.id}">${highlight(r.title, q)}</div>
-      <div class="card-meta">
-        ${r.releaseDate ? `<span class="meta-tag date">${esc(formatMonthLabel(r.releaseDate))}</span>` : ''}
-        ${r.label ? `<span class="meta-tag label">${highlight(r.label, q)}</span>` : ''}
-        ${familyTag(r.genreFamily)}
-        ${tags}
-      </div>
-      ${r.notes ? `<div class="card-note">${highlight(r.notes, q)}</div>` : ''}
-      ${embedUrl ? `<div class="spotify-embed"><iframe src="${esc(embedUrl)}" width="100%" height="152" frameborder="0" loading="lazy" allow="encrypted-media"></iframe></div>` : ''}
-      <div class="card-listen-bar">
-        <button class="heart-btn${isHearted ? ' hearted' : ''}" data-action="heart" data-id="${r.id}" title="${isHearted ? 'You hearted this' : 'Heart this release'}">${isHearted ? '♥' : '♡'} ${r.hearts || 0}</button>
-        ${bandcampUrl ? `<a class="bandcamp-link" href="${esc(bandcampUrl)}" target="_blank" rel="noopener">Bandcamp ↗</a>` : ''}
-        ${r.addedBy ? `<span class="added-by">added by ${esc(r.addedBy)}</span>` : ''}
+      <div class="card-body">
+        <div class="card-artist" data-action="open-modal" data-id="${r.id}">${highlight(r.artist, q)}</div>
+        <div class="card-title" data-action="open-modal" data-id="${r.id}">${highlight(r.title, q)}</div>
+        <div class="card-meta">
+          ${r.releaseDate ? `<span class="meta-tag date">${esc(formatMonthLabel(r.releaseDate))}</span>` : ''}
+          ${r.label ? `<span class="meta-tag label">${highlight(r.label, q)}</span>` : ''}
+          ${familyTag(r.genreFamily)}
+          ${tags}
+        </div>
+        ${r.notes ? `<div class="card-note">${highlight(r.notes, q)}</div>` : ''}
+        ${embedUrl ? `<div class="spotify-embed"><iframe src="${esc(embedUrl)}" width="100%" height="152" frameborder="0" loading="lazy" allow="encrypted-media"></iframe></div>` : ''}
+        <div class="card-listen-bar">
+          <button class="heart-btn${isHearted ? ' hearted' : ''}" data-action="heart" data-id="${r.id}" title="${isHearted ? 'You hearted this' : 'Heart this release'}">${isHearted ? '♥' : '♡'} ${r.hearts || 0}</button>
+          ${bandcampUrl ? `<a class="bandcamp-link" href="${esc(bandcampUrl)}" target="_blank" rel="noopener">Bandcamp ↗</a>` : ''}
+          ${r.addedBy ? `<span class="added-by">added by ${esc(r.addedBy)}</span>` : ''}
+        </div>
       </div>
     </div>`;
 }
@@ -427,13 +480,18 @@ function openModal(id) {
     <div class="modal-overlay" data-action="close-modal">
       <div class="modal-box" data-action="noop">
         <button class="modal-close" data-action="close-modal">✕ close</button>
-        <div class="modal-artist">${esc(target.artist)}</div>
-        <div class="modal-title">${esc(target.title)}</div>
-        <div class="card-meta">
-          ${target.releaseDate ? `<span class="meta-tag date">${esc(formatMonthLabel(target.releaseDate))}</span>` : ''}
-          ${target.label ? `<span class="meta-tag label">${esc(target.label)}</span>` : ''}
-          ${familyTag(target.genreFamily)}
-          ${(target.genre || []).map(g => `<span class="meta-tag">${esc(g)}</span>`).join('')}
+        <div class="modal-header">
+          <div class="modal-cover-wrap">${coverHtml(target, 'modal')}</div>
+          <div class="modal-header-text">
+            <div class="modal-artist">${esc(target.artist)}</div>
+            <div class="modal-title">${esc(target.title)}</div>
+            <div class="card-meta">
+              ${target.releaseDate ? `<span class="meta-tag date">${esc(formatMonthLabel(target.releaseDate))}</span>` : ''}
+              ${target.label ? `<span class="meta-tag label">${esc(target.label)}</span>` : ''}
+              ${familyTag(target.genreFamily)}
+              ${(target.genre || []).map(g => `<span class="meta-tag">${esc(g)}</span>`).join('')}
+            </div>
+          </div>
         </div>
         ${target.notes ? `<div class="modal-note">${esc(target.notes)}</div>` : ''}
         ${embedUrl ? `<div class="spotify-embed"><iframe src="${esc(embedUrl)}" width="100%" height="152" frameborder="0" loading="lazy" allow="encrypted-media"></iframe></div>` : ''}

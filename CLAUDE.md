@@ -141,6 +141,23 @@ family touches). `matchesFilter()` handles the two-tier logic plus the
 special-case `Community Adds` pill (filters on `source`, not
 `genreFamily`/`genre`).
 
+**Cover art is fetched client-side from the iTunes Search API, session-only
+— no persistence.** `fetchCover()`/`coverHtml()` in `index.html` mirror
+music-tracker's cover-art pattern (same public, no-auth,
+CORS-permissive endpoint, same `artist|||title` cache key), but
+**without** music-tracker's "persist the resolved URL back to Airtable"
+step: that would mean a `PATCH` on every visitor's session, and
+Sonic Radar's `PATCH /releases/:id` route is curator-gated (see
+"Collaborative write model") — an anonymous contributor shouldn't be
+able to trigger writes just by loading the page. The trade-off is a
+repeat iTunes lookup per session instead of a one-time resolve; fine at
+this traffic scale. `coverCache` is a plain in-memory object, keyed the
+same way across card tiles and the modal header so both variants share
+one lookup. Design language (Rdio-inspired, 2026-08-06): square art
+tiles lead each card, gapped rounded cards replace the old flush-bordered
+list grid, and card/pill typography went bigger and bolder — the dark
+palette itself didn't change, only how confidently it's used.
+
 **Spotify previews are contributor-pasted links, not an API integration.**
 `spotifyEmbedUrl()` in `lib/pure.js` normalizes whatever a contributor
 pastes (a full `open.spotify.com/{album|track}/ID` link, with or without
