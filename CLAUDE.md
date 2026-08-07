@@ -142,21 +142,39 @@ special-case `Community Adds` pill (filters on `source`, not
 `genreFamily`/`genre`).
 
 **Cover art is fetched client-side from the iTunes Search API, session-only
-— no persistence.** `fetchCover()`/`coverHtml()` in `index.html` mirror
-music-tracker's cover-art pattern (same public, no-auth,
-CORS-permissive endpoint, same `artist|||title` cache key), but
-**without** music-tracker's "persist the resolved URL back to Airtable"
-step: that would mean a `PATCH` on every visitor's session, and
-Sonic Radar's `PATCH /releases/:id` route is curator-gated (see
-"Collaborative write model") — an anonymous contributor shouldn't be
-able to trigger writes just by loading the page. The trade-off is a
-repeat iTunes lookup per session instead of a one-time resolve; fine at
-this traffic scale. `coverCache` is a plain in-memory object, keyed the
-same way across card tiles and the modal header so both variants share
-one lookup. Design language (Rdio-inspired, 2026-08-06): square art
-tiles lead each card, gapped rounded cards replace the old flush-bordered
-list grid, and card/pill typography went bigger and bolder — the dark
-palette itself didn't change, only how confidently it's used.
+— no persistence, and lazy/concurrency-limited.** `fetchCover()`/
+`coverHtml()` in `index.html` mirror music-tracker's cover-art pattern
+(same public, no-auth, CORS-permissive endpoint, same `artist|||title`
+cache key), but differ in two ways. First, **no persistence** — writing
+a resolved URL back to Airtable the way music-tracker does would mean a
+`PATCH` on every visitor's session, and Sonic Radar's `PATCH
+/releases/:id` route is curator-gated (see "Collaborative write model")
+— an anonymous contributor shouldn't be able to trigger writes just by
+loading the page. Second, **lazy loading via `IntersectionObserver` plus
+a `COVER_MAX_CONCURRENT`-capped queue** (`enqueueCoverFetch`/
+`pumpCoverQueue`/`getCoverObserver` in `index.html`): firing a lookup for
+every release in the catalogue on page load (190+ at once) was hammering
+iTunes' search endpoint hard enough that even genuine browser requests
+started coming back empty — "some covers load, some don't" was a real
+rate-limiting bug, not a cosmetic one. Only card tiles actually scrolled
+near-into-view get queued, a few at a time; the modal header fetches
+eagerly since it's the one thing being looked at. `coverCache` is a
+plain in-memory object shared across both variants.
+
+**Design language is deliberately Rdio-inspired (pushed further
+2026-08-06 after an initial pass didn't go far enough)** — bold,
+confident, minimal chrome, content-forward, still on the existing dark
+palette (no theme switch). Concretely: the wordmark and all headline/
+card-artist/modal typography moved from a delicate serif-italic
+(Cormorant Garamond, now dropped from the font stack entirely) to bold
+DM Sans (700–800 weight); square iTunes art tiles lead each card;
+gapped rounded cards replaced the old flush-bordered list grid; the
+static "Ambient · Jazz · Metal · Studio LPs" eyebrow line was removed
+from the header entirely — a hardcoded family list doesn't scale as
+more genre families get added, and it read as boilerplate. If another
+genre family is added later, do not add it back in that form; the
+family pill row (already data-driven) is the correct place for that
+information to live.
 
 **Spotify previews are contributor-pasted links, not an API integration.**
 `spotifyEmbedUrl()` in `lib/pure.js` normalizes whatever a contributor
@@ -219,21 +237,31 @@ base** (a personal listening log, not a curated prototype), filtered to
 records whose free-text `Genre` field matched a metal/extreme-metal
 vocabulary (hardcore/punk-family genres like Metallic Hardcore,
 Post-Hardcore, Powerviolence, and Screamo were deliberately excluded as
-a different genre family, even though metal-adjacent). Given the batch
-size, descriptor tagging here used a scripted per-subgenre archetype
-(each of the ~20 raw genre strings like "Technical Death Metal" or
-"Atmospheric Black Metal" has its own baseline Texture/Tone/Character/
-Density/Motion profile, not one flat "Metal" profile) plus deterministic
-per-record jitter and keyword nuance pulled from the personal notes text
-where present (e.g. "raw production" → adds Tape-hiss/Analog-noise and
-bumps Motion) — this is a lighter-touch process than the fully
-hand-reviewed pass used for the Jazz import, a deliberate trade-off for
-scale rather than an oversight. If it produces bad matches in practice,
-re-tagging individual releases through the normal edit path is fine;
-don't assume the archetype table is precise. 7 of the original 83
-`music-tracker` matches had future release dates (the personal log
+a different genre family, even though metal-adjacent). 7 of the original
+83 `music-tracker` matches had future release dates (the personal log
 tracks upcoming releases the user hasn't heard yet) and were removed —
 see "Unreleased albums don't belong in the catalogue" above.
+
+**Descriptor tagging must differentiate within a subgenre, not just
+label it — a first pass at Metal got this wrong and was corrected the
+same day.** The initial import used a scripted per-subgenre archetype
+(every "Black Metal" release got a near-identical Texture/Tone/
+Character profile, differing only by light jitter), which meant Similar
+Releases effectively degenerated into "this is black metal, so here's
+more black metal" — exactly the shallow genre-tag-matching the whole
+descriptor system exists to avoid (see "Sonic similarity is structured"
+above). It was replaced with real per-release judgment: each of the 76
+Metal releases was tagged individually based on the artist's actual
+sonic character (e.g. Archspire's hyper-fast technical precision vs.
+Immolation's dissonant mid-tempo atmosphere vs. Temple of Void's doom-
+death crawl — three "Death Metal" releases with three different
+Density/Motion/Character profiles). Verified after the fact: the
+Death Metal bucket alone (35 releases) now has 23 distinct full
+descriptor combinations, not 2-3. If a new large batch import happens
+again, tag it with this same level of per-release distinction —
+archetype-by-subgenre is a trap that looks fine at a glance (every
+record has *plausible* tags) but silently defeats the whole point of
+descriptor-based similarity.
 
 **`esc()` (in `lib/pure.js`) must wrap any user-provided string
 interpolated into `innerHTML`** (artist, title, label, notes, genre/

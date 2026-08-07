@@ -4,16 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sonic Radar</title>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Space+Mono:wght@400;700&family=DM+Sans:wght@200;300;400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@200;300;400;500;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
 <header>
-  <div class="header-wave"></div>
-  <div class="header-eyebrow">Ambient · Jazz · Metal · Studio LPs</div>
-  <h1>Sonic <em>Radar</em></h1>
-  <div class="header-sub">A growing, collaborative catalogue · Sonic similarity, not just shared genre tags</div>
+  <h1>Sonic <span class="accent-word">Radar</span></h1>
+  <div class="header-sub">A growing, collaborative catalogue of sonic similarity — not just shared genre tags.</div>
 </header>
 
 <div class="controls">
@@ -182,22 +180,46 @@ let heartedIds = new Set(JSON.parse(localStorage.getItem(HEARTED_STORAGE) || '[]
 let formFamily = 'Ambient';
 
 // ---- Cover art (iTunes Search API, client-side, session-only) ----
-// Mirrors music-tracker's cover-art pattern, but simpler: no Airtable
-// persistence, since Sonic Radar's PATCH route is curator-gated and
-// writing a resolved URL back for every visitor's lookup isn't
-// something an anonymous contributor should be able to trigger. Each
-// session just re-resolves via iTunes and caches in memory for its
-// own lifetime — a small repeat-fetch cost, not a correctness issue.
+// Mirrors music-tracker's cover-art pattern, but with two differences:
+// (1) no Airtable persistence — Sonic Radar's PATCH route is curator-gated,
+// so writing a resolved URL back for every visitor's lookup isn't
+// something an anonymous contributor should be able to trigger; each
+// session just re-resolves via iTunes and caches in memory for its own
+// lifetime. (2) fetches are lazy (IntersectionObserver) and
+// concurrency-limited, not fired all at once for the whole catalogue —
+// with 190+ releases, firing every lookup on page load was hammering
+// iTunes' search endpoint hard enough that even genuine browser requests
+// started coming back empty/rate-limited ("some covers load, some
+// don't"). Loading only what's actually visible, a few at a time, is
+// the real fix — not a cosmetic one.
 const coverCache = {};
+const coverQueue = [];
+let coverInFlight = 0;
+const COVER_MAX_CONCURRENT = 3;
 
 function coverKey(artist, title) {
   return `${(artist || '').trim().toLowerCase()}|||${(title || '').trim().toLowerCase()}`;
 }
 
-async function fetchCover(release) {
-  const key = coverKey(release.artist, release.title);
-  if (key in coverCache) return coverCache[key];
-  coverCache[key] = undefined; // in-flight marker
+function enqueueCoverFetch(key, release) {
+  if (key in coverCache) return; // already resolved, resolving, or queued
+  coverCache[key] = undefined; // in-flight marker — blocks duplicate enqueues
+  coverQueue.push({ key, release });
+  pumpCoverQueue();
+}
+
+function pumpCoverQueue() {
+  while (coverInFlight < COVER_MAX_CONCURRENT && coverQueue.length) {
+    const { key, release } = coverQueue.shift();
+    coverInFlight++;
+    resolveCover(key, release).finally(() => {
+      coverInFlight--;
+      pumpCoverQueue();
+    });
+  }
+}
+
+async function resolveCover(key, release) {
   try {
     const term = `${release.artist || ''} ${release.title || ''}`.trim();
     const params = new URLSearchParams({ term, entity: 'album', limit: '1' });
@@ -211,24 +233,52 @@ async function fetchCover(release) {
     coverCache[key] = null;
   }
   render();
-  return coverCache[key];
 }
 
-// Returns cover art markup for a release, kicking off a background
-// iTunes lookup the first time a given artist/title pair is rendered.
-// `variant` picks the CSS class (card grid tile vs the larger modal
-// header) and whether a re-render is worth triggering on load.
+// One shared observer, lazily created. rootMargin pre-fetches slightly
+// before a tile scrolls into view rather than exactly on-edge.
+let coverObserver = null;
+function getCoverObserver() {
+  if (coverObserver) return coverObserver;
+  coverObserver = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (!entry.isIntersecting) return;
+      const el = entry.target;
+      coverObserver.unobserve(el);
+      const key = el.dataset.coverKey;
+      const release = releases.find((r) => coverKey(r.artist, r.title) === key);
+      if (release) enqueueCoverFetch(key, release);
+    });
+  }, { rootMargin: '200px' });
+  return coverObserver;
+}
+
+// Call after any render that inserts new [data-cover-observe] placeholders
+// (they're plain innerHTML replacements, so each render needs fresh
+// observe() calls — already-cached/in-flight keys are cheap no-ops
+// via the coverCache guard in enqueueCoverFetch).
+function observeCoverPlaceholders() {
+  const observer = getCoverObserver();
+  document.querySelectorAll('[data-cover-observe]').forEach((el) => observer.observe(el));
+}
+
+// Returns cover art markup for a release. Card-grid tiles are lazy
+// (queued only once scrolled near-into-view); the modal header is
+// always the one thing the user is looking at, so it fetches eagerly.
 function coverHtml(release, variant) {
   const imgClass = variant === 'modal' ? 'modal-cover' : 'card-cover';
   const placeholderClass = variant === 'modal' ? 'modal-cover-placeholder' : 'card-cover-placeholder';
   const key = coverKey(release.artist, release.title);
   const cached = coverCache[key];
-  if (cached === undefined) {
-    if (!(key in coverCache)) fetchCover(release);
+  if (cached) {
+    return `<img class="${imgClass} cover-loading" onload="this.classList.add('cover-loaded')" src="${esc(cached)}" alt="" loading="lazy">`;
+  }
+  if (cached === null) return `<div class="${placeholderClass}">♪</div>`; // resolved: no art found
+  if (variant === 'modal') {
+    enqueueCoverFetch(key, release);
     return `<div class="${placeholderClass}">♪</div>`;
   }
-  if (!cached) return `<div class="${placeholderClass}">♪</div>`;
-  return `<img class="${imgClass} cover-loading" onload="this.classList.add('cover-loaded')" src="${esc(cached)}" alt="" loading="lazy">`;
+  return `<div class="${placeholderClass}" data-cover-key="${esc(key)}" data-cover-observe="1">♪</div>`;
 }
 
 // ---- Worker CRUD ----
@@ -398,6 +448,7 @@ function render() {
   grid.querySelectorAll('.album-card').forEach((c, i) => {
     c.style.animationDelay = `${Math.min(i * 30, 600)}ms`;
   });
+  observeCoverPlaceholders();
 }
 
 function familyTag(family) {
