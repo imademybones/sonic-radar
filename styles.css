@@ -1,16 +1,20 @@
 :root {
-  --bg: #080c12;
-  --surface: #0d1320;
-  --surface2: #111927;
-  --border: #1e2d42;
-  --border2: #243347;
-  --accent: #7eb4d4;
-  --accent2: #a8c8a0;
-  --accent3: #c4a0c0;
-  --accent4: #c0806e;
-  --text: #d8e8f0;
-  --text-muted: #607080;
-  --text-dim: #364858;
+  --bg: #faf9f6;
+  --surface: #ffffff;
+  --surface2: #f2f1ec;
+  --border: #e6e3dc;
+  --border2: #d5d1c7;
+  --accent: #1c7fc4;
+  --accent2: #3f8a45;
+  --accent3: #9b3f92;
+  --accent4: #c8562f;
+  --text: #17191c;
+  --text-muted: #62666d;
+  --text-dim: #9a9da3;
+  /* Fixed-dark overlay chips (card number/delete, sitting on arbitrary
+     album art) always use light text regardless of page theme — the
+     chip itself supplies the contrast, not the page background. */
+  --overlay-text: #f2f2f2;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -32,7 +36,7 @@ body::before {
   transform: translateX(-50%);
   width: 80vw;
   height: 60vw;
-  background: radial-gradient(ellipse, rgba(126,180,212,0.04) 0%, transparent 70%);
+  background: radial-gradient(ellipse, rgba(28,127,196,0.05) 0%, transparent 70%);
   pointer-events: none;
   z-index: 0;
 }
@@ -341,7 +345,7 @@ h1 .accent-word { color: var(--accent); }
 
 /* Rdio-language card grid: big square art, gapped rounded tiles instead
    of a flush-bordered spreadsheet grid, bolder/larger type throughout. */
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.5rem; padding: 1.8rem; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 1.25rem; padding: 1.8rem; }
 
 .album-card {
   background: var(--surface);
@@ -359,10 +363,10 @@ h1 .accent-word { color: var(--accent); }
 .album-card:hover {
   transform: translateY(-3px);
   border-color: var(--border2);
-  box-shadow: 0 12px 28px -12px rgba(0,0,0,0.55);
+  box-shadow: 0 12px 28px -12px rgba(20,20,20,0.18);
 }
 
-.card-cover-wrap { position: relative; aspect-ratio: 1 / 1; cursor: pointer; background: var(--surface2); }
+.card-cover-wrap { position: relative; aspect-ratio: 16 / 10; cursor: pointer; background: var(--surface2); }
 
 .card-cover, .card-cover-placeholder {
   width: 100%; height: 100%; display: block; object-fit: cover;
@@ -381,7 +385,7 @@ h1 .accent-word { color: var(--accent); }
   font-family: 'Space Mono', monospace;
   font-size: 0.6rem;
   font-weight: 700;
-  color: var(--text);
+  color: var(--overlay-text);
   letter-spacing: 0.08em;
   background: rgba(8,12,18,0.72);
   backdrop-filter: blur(2px);
@@ -396,7 +400,7 @@ h1 .accent-word { color: var(--accent); }
   font-family: 'Space Mono', monospace;
   font-size: 0.6rem;
   font-weight: 700;
-  color: var(--text);
+  color: var(--overlay-text);
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.15s, color 0.15s;
@@ -502,7 +506,7 @@ h1 .accent-word { color: var(--accent); }
   letter-spacing: 0.1em;
 }
 
-.card-highlight { background: rgba(126,180,212,0.2); color: var(--accent); border-radius: 2px; padding: 0 1px; }
+.card-highlight { background: rgba(28,127,196,0.15); color: var(--accent); border-radius: 2px; padding: 0 1px; }
 
 .spotify-embed { margin-top: 0.85rem; border-radius: 4px; overflow: hidden; }
 .spotify-embed iframe { display: block; border-radius: 4px; }
@@ -530,7 +534,7 @@ h1 .accent-word { color: var(--accent); }
   transition: all 0.15s;
 }
 .heart-btn:hover { border-color: var(--accent3); color: var(--accent3); }
-.heart-btn.hearted { background: rgba(196,160,192,0.12); border-color: var(--accent3); color: var(--accent3); cursor: default; }
+.heart-btn.hearted { background: rgba(155,63,146,0.1); border-color: var(--accent3); color: var(--accent3); cursor: default; }
 
 .added-by {
   font-family: 'Space Mono', monospace;
@@ -587,7 +591,7 @@ h1 .accent-word { color: var(--accent); }
 
 .modal-header { display: flex; gap: 1.3rem; align-items: flex-start; margin-bottom: 0.4rem; }
 
-.modal-cover-wrap { flex: 0 0 108px; width: 108px; height: 108px; border-radius: 8px; overflow: hidden; background: var(--surface2); }
+.modal-cover-wrap { flex: 0 0 84px; width: 84px; height: 84px; border-radius: 8px; overflow: hidden; background: var(--surface2); }
 .modal-cover, .modal-cover-placeholder { width: 100%; height: 100%; display: block; object-fit: cover; }
 .modal-cover-placeholder { display: flex; align-items: center; justify-content: center; font-size: 1.6rem; color: var(--text-dim); }
 .modal-cover.cover-loading { opacity: 0; }

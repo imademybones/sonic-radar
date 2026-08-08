@@ -161,20 +161,32 @@ near-into-view get queued, a few at a time; the modal header fetches
 eagerly since it's the one thing being looked at. `coverCache` is a
 plain in-memory object shared across both variants.
 
-**Design language is deliberately Rdio-inspired (pushed further
-2026-08-06 after an initial pass didn't go far enough)** — bold,
-confident, minimal chrome, content-forward, still on the existing dark
-palette (no theme switch). Concretely: the wordmark and all headline/
-card-artist/modal typography moved from a delicate serif-italic
-(Cormorant Garamond, now dropped from the font stack entirely) to bold
-DM Sans (700–800 weight); square iTunes art tiles lead each card;
-gapped rounded cards replaced the old flush-bordered list grid; the
-static "Ambient · Jazz · Metal · Studio LPs" eyebrow line was removed
-from the header entirely — a hardcoded family list doesn't scale as
-more genre families get added, and it read as boilerplate. If another
-genre family is added later, do not add it back in that form; the
-family pill row (already data-driven) is the correct place for that
-information to live.
+**Design language is deliberately Rdio-inspired — bold, confident,
+minimal chrome, content-forward.** It went through two passes: the
+first (2026-08-06) kept the original dark palette and just changed
+typography/layout, which the user judged as not going far enough; the
+second (2026-08-07) switched to a **full light theme** (white/near-white
+`--bg`/`--surface`, near-black `--text`, saturated-but-legible accent
+colors) — the actual Rdio look, not a dark-mode approximation of it.
+Concretely: the wordmark and all headline/card-artist/modal typography
+moved from a delicate serif-italic (Cormorant Garamond, dropped from the
+font stack entirely) to bold DM Sans (700–800 weight); art tiles (16:10,
+deliberately shorter than a full square — an early pass had them too
+large and dominant) lead each card; gapped rounded cards replaced the
+old flush-bordered list grid; the static "Ambient · Jazz · Metal ·
+Studio LPs" eyebrow line was removed from the header entirely — a
+hardcoded family list doesn't scale as more genre families get added,
+and it read as boilerplate. If another genre family is added later, do
+not add it back in that form; the family pill row (already data-driven)
+is the correct place for that information to live.
+
+**The overlay badges on card art (`.card-number`, `.card-delete`) stay
+on a fixed dark translucent chip regardless of page theme** — they sit
+on top of arbitrary album-art colors, not the page background, so they
+need their own guaranteed contrast. Their text uses `--overlay-text`
+(always light), not `--text` (which flips between themes) — don't
+"fix" this by swapping them to `--text` when touching this CSS, that
+would make them unreadable in light mode.
 
 **Spotify previews are contributor-pasted links, not an API integration.**
 `spotifyEmbedUrl()` in `lib/pure.js` normalizes whatever a contributor
@@ -262,6 +274,19 @@ again, tag it with this same level of per-release distinction —
 archetype-by-subgenre is a trap that looks fine at a glance (every
 record has *plausible* tags) but silently defeats the whole point of
 descriptor-based similarity.
+
+**Notes should read like the discovery-sweep's curatorial style by
+default, not a casual personal aside.** The user explicitly called out
+liking the sweep's Notes ("Second collaborative LP from Mogard and
+Irisarri — emerging from a three-day residency at Morphine Raum,
+Berlin.") over off-the-cuff supplied text — that curatorial register
+(what's actually notable: label, collaborators, recording context,
+sonic character, in 1-2 sentences) is the default bar for *any* Notes
+written for this app, whether by a batch import, the discovery sweep,
+or written on the user's behalf in a session — not just something the
+sweep prompt happens to ask for. The add-form's Notes placeholder
+(`#f-note` in `index.html`) demonstrates this register directly rather
+than a generic "say something about the record" prompt.
 
 **`esc()` (in `lib/pure.js`) must wrap any user-provided string
 interpolated into `innerHTML`** (artist, title, label, notes, genre/
