@@ -243,7 +243,12 @@ async function resolveCover(key, release) {
 // blank flash while scrolling as covers resolve in the background.
 function updateCoverInPlace(key, release) {
   document.querySelectorAll(`[data-cover-key="${CSS.escape(key)}"]`).forEach((wrap) => {
-    wrap.innerHTML = coverHtml(release, wrap.dataset.coverVariant);
+    // Replace only the existing media element (img or placeholder), not
+    // the whole wrap — the wrap also holds sibling badges/buttons (card
+    // number, community badge, delete, edit-cover) that setting
+    // wrap.innerHTML here would silently wipe out.
+    const media = wrap.querySelector('.card-cover, .card-cover-placeholder, .modal-cover, .modal-cover-placeholder');
+    if (media) media.outerHTML = coverHtml(release, wrap.dataset.coverVariant);
   });
 }
 
