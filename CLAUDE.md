@@ -161,6 +161,34 @@ near-into-view get queued, a few at a time; the modal header fetches
 eagerly since it's the one thing being looked at. `coverCache` is a
 plain in-memory object shared across both variants.
 
+**A resolved cover patches only its own DOM element — it must never
+call `render()`.** This was a real bug: `resolveCover()` originally
+called `render()` on every single cover resolution, which rebuilds the
+*entire* grid's `innerHTML`. Every `.album-card` has a `fadeUp`
+entry animation starting at `opacity: 0`, so destroying and recreating
+every card's DOM on every cover load (many, in quick succession, while
+scrolling through a lazy-loaded grid) made the whole page flash blank
+repeatedly. Fixed via `updateCoverInPlace(key, release)`: every cover
+wrap (`.card-cover-wrap`/`.modal-cover-wrap`) carries `data-cover-key` +
+`data-cover-variant`, and a resolution finds and replaces only the
+matching wrap(s)' `innerHTML` — no grid rebuild, no animation restart.
+If you touch this flow again, keep it that way; reintroducing a
+`render()` call here reintroduces the flash.
+
+**Cover art can be manually overridden per release — curator-gated,
+like edit/delete.** The `Cover Override` Airtable field (`fld9ruNqKQDudqc9h`,
+url type) wins over the iTunes auto-lookup whenever
+set (checked first in `coverHtml()`, via `safeExternalUrl()` since it's
+a contributor-pasted URL rendered into an `<img src>`). The pencil
+button (`.card-edit-cover`/`.modal-edit-cover`, `data-action=
+"edit-cover"`) only renders when `curatorKey` is set — same gating as
+the delete button — because an open, ungated "set any image URL for
+any release" action would be a real moderation/abuse surface, unlike
+the low-stakes Hearts counter. `requestEditCover()` uses a plain
+`window.prompt()` rather than a dedicated modal/form; this is a rare
+curator action, not worth its own UI surface. Passing an empty string
+clears the override and falls back to the iTunes lookup.
+
 **Design language is deliberately Rdio-inspired — bold, confident,
 minimal chrome, content-forward.** It went through two passes: the
 first (2026-08-06) kept the original dark palette and just changed

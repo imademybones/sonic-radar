@@ -73,6 +73,7 @@ Fields (name → id):
 | Hearts | `fldczCJJrTRXm9y1F` | number (aggregate, open to anyone) |
 | Spotify URL | `fldG1PirapSvv99IM` | url (contributor-pasted, see CLAUDE.md) |
 | Bandcamp URL | `fldXDQc0tts3Fktfg` | url (contributor-pasted link-out, scheme-checked via `safeExternalUrl`) |
+| Cover Override | `fld9ruNqKQDudqc9h` | url (curator-only, added 2026-08-08 — wins over the iTunes auto-lookup, see CLAUDE.md) |
 | Added By | `fldxNMr7EyxvPgYYb` | singleLineText (optional, free-text, unverified) |
 | Added At | `fldcZU3qgMsaqlef6` | number (epoch ms) |
 | Updated At | `fldbujz7v3zw0wLh4` | number (epoch ms) |

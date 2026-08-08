@@ -143,7 +143,7 @@
 
 <script type="module">
 import {
-  parseReleaseDate, releaseYear, formatMonthLabel, dedupeKey, esc,
+  parseReleaseDate, releaseYear, formatMonthLabel, formatShortDate, dedupeKey, esc,
   recordToRelease, releaseToFields, spotifyEmbedUrl, safeExternalUrl,
   similarReleases, moreFromArtist,
 } from './lib/pure.js';
@@ -233,7 +233,18 @@ async function resolveCover(key, release) {
   } catch (e) {
     coverCache[key] = null;
   }
-  render();
+  updateCoverInPlace(key, release);
+}
+
+// Patches just the resolved release's cover wrap(s) in place — a full
+// render() here would rebuild the entire grid's innerHTML on every
+// single cover resolution, which (a) is wasteful and (b) restarts the
+// fadeUp entry animation for every card at once, causing a visible
+// blank flash while scrolling as covers resolve in the background.
+function updateCoverInPlace(key, release) {
+  document.querySelectorAll(`[data-cover-key="${CSS.escape(key)}"]`).forEach((wrap) => {
+    wrap.innerHTML = coverHtml(release, wrap.dataset.coverVariant);
+  });
 }
 
 // One shared observer, lazily created. rootMargin pre-fetches slightly
@@ -254,22 +265,32 @@ function getCoverObserver() {
   return coverObserver;
 }
 
-// Call after any render that inserts new [data-cover-observe] placeholders
-// (they're plain innerHTML replacements, so each render needs fresh
-// observe() calls — already-cached/in-flight keys are cheap no-ops
-// via the coverCache guard in enqueueCoverFetch).
+// Call after any render that inserts new cover wraps (they're plain
+// innerHTML replacements, so each render needs fresh observe() calls —
+// already-cached/in-flight/overridden keys are cheap no-ops via the
+// coverCache guard in enqueueCoverFetch).
 function observeCoverPlaceholders() {
   const observer = getCoverObserver();
-  document.querySelectorAll('[data-cover-observe]').forEach((el) => observer.observe(el));
+  document.querySelectorAll('.card-cover-wrap[data-cover-key]').forEach((el) => {
+    if (!el.querySelector('img')) observer.observe(el);
+  });
 }
 
-// Returns cover art markup for a release. Card-grid tiles are lazy
-// (queued only once scrolled near-into-view); the modal header is
-// always the one thing the user is looking at, so it fetches eagerly.
+// Returns cover art markup for a release — just the inner content of a
+// `.card-cover-wrap`/`.modal-cover-wrap` (which itself carries
+// `data-cover-key`/`data-cover-variant` so updateCoverInPlace() can find
+// and patch it later without touching anything else). Card-grid tiles
+// are lazy (queued only once scrolled near-into-view, via the wrap
+// itself being observed); the modal header is always the one thing
+// being looked at, so it fetches eagerly.
 function coverHtml(release, variant) {
   const imgClass = variant === 'modal' ? 'modal-cover' : 'card-cover';
   const placeholderClass = variant === 'modal' ? 'modal-cover-placeholder' : 'card-cover-placeholder';
   const key = coverKey(release.artist, release.title);
+  const overrideUrl = safeExternalUrl(release.coverOverride);
+  if (overrideUrl) {
+    return `<img class="${imgClass} cover-loading" onload="this.classList.add('cover-loaded')" src="${esc(overrideUrl)}" alt="" loading="lazy">`;
+  }
   const cached = coverCache[key];
   if (cached) {
     return `<img class="${imgClass} cover-loading" onload="this.classList.add('cover-loaded')" src="${esc(cached)}" alt="" loading="lazy">`;
@@ -277,9 +298,8 @@ function coverHtml(release, variant) {
   if (cached === null) return `<div class="${placeholderClass}">♪</div>`; // resolved: no art found
   if (variant === 'modal') {
     enqueueCoverFetch(key, release);
-    return `<div class="${placeholderClass}">♪</div>`;
   }
-  return `<div class="${placeholderClass}" data-cover-key="${esc(key)}" data-cover-observe="1">♪</div>`;
+  return `<div class="${placeholderClass}">♪</div>`;
 }
 
 // ---- Worker CRUD ----
@@ -323,6 +343,16 @@ async function createRelease(entry) {
 
 async function deleteRelease(id) {
   await workerRequest(`/releases/${id}`, { method: 'DELETE' });
+}
+
+async function updateCoverOverride(id, url) {
+  // Airtable's single-record PATCH (.../{recordId}) returns the record
+  // directly, not wrapped in {records: [...]} like the bulk endpoints.
+  const data = await workerRequest(`/releases/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ fields: { 'Cover Override': url } }),
+  });
+  return recordToRelease(data);
 }
 
 // ---- Filtering ----
@@ -465,17 +495,22 @@ function card(r, num) {
   const deleteBtn = curatorKey
     ? `<button class="card-delete" data-action="delete" data-id="${r.id}">${isPendingDelete ? '✕ confirm?' : '✕ remove'}</button>`
     : '';
+  const editCoverBtn = curatorKey
+    ? `<button class="card-edit-cover" data-action="edit-cover" data-id="${r.id}" title="Edit artwork" aria-label="Edit artwork">✎</button>`
+    : '';
   const q = searchQuery;
   const embedUrl = spotifyEmbedUrl(r.spotifyUrl);
   const bandcampUrl = safeExternalUrl(r.bandcampUrl);
   const isHearted = heartedIds.has(r.id);
+  const coverKeyAttr = coverKey(r.artist, r.title);
   return `
     <div class="album-card">
-      <div class="card-cover-wrap" data-action="open-modal" data-id="${r.id}">
+      <div class="card-cover-wrap" data-action="open-modal" data-id="${r.id}" data-cover-key="${esc(coverKeyAttr)}" data-cover-variant="card">
         ${coverHtml(r, 'card')}
-        <span class="card-number">${String(num).padStart(2, '0')}</span>
+        <span class="card-number">${esc(formatShortDate(r.releaseDate))}</span>
         ${badge}
         ${deleteBtn}
+        ${editCoverBtn}
       </div>
       <div class="card-body">
         <div class="card-artist" data-action="open-modal" data-id="${r.id}">${highlight(r.artist, q)}</div>
@@ -533,7 +568,10 @@ function openModal(id) {
       <div class="modal-box" data-action="noop">
         <button class="modal-close" data-action="close-modal">✕ close</button>
         <div class="modal-header">
-          <div class="modal-cover-wrap">${coverHtml(target, 'modal')}</div>
+          <div class="modal-cover-wrap" data-cover-key="${esc(coverKey(target.artist, target.title))}" data-cover-variant="modal">
+            ${coverHtml(target, 'modal')}
+            ${curatorKey ? `<button class="modal-edit-cover" data-action="edit-cover" data-id="${target.id}" title="Edit artwork" aria-label="Edit artwork">✎</button>` : ''}
+          </div>
           <div class="modal-header-text">
             <div class="modal-artist">${esc(target.artist)}</div>
             <div class="modal-title">${esc(target.title)}</div>
@@ -648,6 +686,41 @@ async function commitDelete(id) {
       render();
     } else {
       setStatus('Could not delete — check your connection and try again.');
+    }
+  }
+}
+
+// Curator-only: paste an image URL to fix a missing/wrong cover where
+// the iTunes auto-lookup didn't find (or found the wrong) art. A plain
+// prompt() rather than a modal/form — this is a rare, low-frequency
+// curator action, not something worth its own UI surface.
+async function requestEditCover(id) {
+  const target = releases.find(r => r.id === id);
+  if (!target) return;
+  const current = target.coverOverride || '';
+  const input = window.prompt('Paste an image URL for this release\'s cover art (leave blank and confirm to remove an existing override):', current);
+  if (input === null) return; // cancelled
+  const url = input.trim();
+  if (url && !safeExternalUrl(url)) {
+    setStatus('That doesn\'t look like a valid http(s) image URL — artwork not updated.');
+    return;
+  }
+  try {
+    const updated = await updateCoverOverride(id, url);
+    const idx = releases.findIndex(r => r.id === id);
+    if (idx !== -1) releases[idx] = { ...releases[idx], coverOverride: updated.coverOverride };
+    if (openModalId === id) openModal(id);
+    render();
+    setStatus(url ? 'Artwork updated.' : 'Artwork override removed.');
+  } catch (e) {
+    console.error(e);
+    if (String(e.message).includes('403')) {
+      curatorKey = '';
+      localStorage.removeItem(CURATOR_KEY_STORAGE);
+      setStatus('Curator passphrase rejected — unlock again to edit artwork.');
+      render();
+    } else {
+      setStatus('Could not update artwork — check your connection and try again.');
     }
   }
 }
@@ -781,6 +854,9 @@ document.addEventListener('click', (e) => {
       break;
     case 'delete':
       requestDelete(id);
+      break;
+    case 'edit-cover':
+      requestEditCover(id);
       break;
     case 'open-modal':
       openModal(id);

@@ -413,6 +413,24 @@ h1 .accent-word { color: var(--accent); }
 .album-card:hover .card-delete { opacity: 1; }
 .card-delete:hover { color: #e08080; }
 
+.card-edit-cover {
+  position: absolute;
+  bottom: 0.6rem;
+  right: 0.6rem;
+  font-size: 0.7rem;
+  line-height: 1;
+  color: var(--overlay-text);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+  background: rgba(8,12,18,0.72);
+  border: none;
+  padding: 0.3rem 0.4rem;
+  border-radius: 20px;
+}
+.album-card:hover .card-edit-cover { opacity: 1; }
+.card-edit-cover:hover { color: var(--accent); }
+
 .card-body { padding: 1.1rem 1.3rem 1.3rem; }
 
 .card-artist {
@@ -591,7 +609,22 @@ h1 .accent-word { color: var(--accent); }
 
 .modal-header { display: flex; gap: 1.3rem; align-items: flex-start; margin-bottom: 0.4rem; }
 
-.modal-cover-wrap { flex: 0 0 84px; width: 84px; height: 84px; border-radius: 8px; overflow: hidden; background: var(--surface2); }
+.modal-cover-wrap { position: relative; flex: 0 0 84px; width: 84px; height: 84px; border-radius: 8px; overflow: hidden; background: var(--surface2); }
+
+.modal-edit-cover {
+  position: absolute;
+  bottom: 0.25rem;
+  right: 0.25rem;
+  font-size: 0.65rem;
+  line-height: 1;
+  color: var(--overlay-text);
+  cursor: pointer;
+  background: rgba(8,12,18,0.72);
+  border: none;
+  padding: 0.25rem 0.35rem;
+  border-radius: 20px;
+}
+.modal-edit-cover:hover { color: var(--accent); }
 .modal-cover, .modal-cover-placeholder { width: 100%; height: 100%; display: block; object-fit: cover; }
 .modal-cover-placeholder { display: flex; align-items: center; justify-content: center; font-size: 1.6rem; color: var(--text-dim); }
 .modal-cover.cover-loading { opacity: 0; }
